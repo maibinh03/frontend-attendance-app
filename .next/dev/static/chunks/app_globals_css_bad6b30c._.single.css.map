@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["turbopack:///[project]/app/globals.css"],"sourcesContent":["@import './styles/base.css';\n@import './styles/auth.css';\n@import './styles/admin-dashboard.css';\n@import './styles/user-dashboard.css';\n"],"names":[],"mappings":""}}]
+}

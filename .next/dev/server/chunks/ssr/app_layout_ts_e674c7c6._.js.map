@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/mac/Dev/Du%CC%9B%CC%A3%20a%CC%81n%20u%CC%9B%CC%81ng%20du%CC%A3ng%20cha%CC%82%CC%81m%20co%CC%82ng/frontend/app/layout.ts"],"sourcesContent":["import { createElement, type ReactNode, type ReactElement } from 'react'\nimport type { Metadata } from 'next'\nimport './styles/base.css'\nimport './styles/auth.css'\nimport './styles/admin-dashboard.css'\nimport './styles/user-dashboard.css'\n\n// Có nên SEO ở đây không???\nexport const metadata: Metadata = {\n  title: 'Hệ thống chấm công',\n  description: 'Ứng dụng chấm công Bình Boong'\n}\n\nexport default function RootLayout({\n  children\n}: Readonly<{\n  children: ReactNode\n}>): ReactElement {\n  return createElement(\n    'html',\n    { lang: 'vi' },\n    createElement('body', null, children)\n  )\n}\n\n"],"names":[],"mappings":";;;;;;AAAA;;;;;;AAQO,MAAM,WAAqB;IAChC,OAAO;IACP,aAAa;AACf;AAEe,SAAS,WAAW,EACjC,QAAQ,EAGR;IACA,qBAAO,IAAA,sNAAa,EAClB,QACA;QAAE,MAAM;IAAK,iBACb,IAAA,sNAAa,EAAC,QAAQ,MAAM;AAEhC"}}]
+}

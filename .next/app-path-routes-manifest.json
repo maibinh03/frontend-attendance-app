@@ -1,0 +1,10 @@
+{
+  "/(auth)/login/page": "/login",
+  "/(auth)/register/page": "/register",
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/dashboard/admin/page": "/dashboard/admin",
+  "/dashboard/page": "/dashboard",
+  "/dashboard/user/page": "/dashboard/user",
+  "/page": "/"
+}

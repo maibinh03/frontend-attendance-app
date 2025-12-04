@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 14, "column": 0}, "map": {"version":3,"sources":["file:///Users/mac/Dev/Du%CC%9B%CC%A3%20a%CC%81n%20u%CC%9B%CC%81ng%20du%CC%A3ng%20cha%CC%82%CC%81m%20co%CC%82ng/frontend/app/page.ts"],"sourcesContent":["import { redirect } from 'next/navigation'\n\nexport default function HomePage(): never {\n  redirect('/login')\n}\n\n"],"names":[],"mappings":";;;;AAAA;AAAA;;AAEe,SAAS;IACtB,IAAA,iMAAQ,EAAC;AACX"}}]
+}

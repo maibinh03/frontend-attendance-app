@@ -1,0 +1,274 @@
+/* [project]/app/styles/auth.css [app-client] (css) */
+.login-container, .register-container {
+  color: #fff;
+  background: #000;
+  min-height: 100vh;
+  display: flex;
+}
+
+.login-left, .register-left {
+  background: #fff;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  padding: 80px 60px;
+  display: flex;
+}
+
+.register-left {
+  overflow-y: auto;
+}
+
+.login-content, .register-content {
+  width: 100%;
+  max-width: 420px;
+}
+
+.login-content h1, .register-content h1 {
+  letter-spacing: -1px;
+  color: #000;
+  margin: 0 0 8px;
+  font-size: 36px;
+  font-weight: 300;
+}
+
+.subtitle {
+  color: #666;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  margin: 0 0 48px;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.login-form, .register-form {
+  flex-direction: column;
+  gap: 32px;
+  display: flex;
+}
+
+.register-form {
+  gap: 24px;
+}
+
+.form-group {
+  flex-direction: column;
+  gap: 10px;
+  display: flex;
+}
+
+.form-group label {
+  color: #000;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.form-group input {
+  color: #000;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #e0e0e0;
+  width: 100%;
+  padding: 14px 0;
+  font-family: inherit;
+  font-size: 16px;
+  transition: border-color .3s;
+}
+
+.form-group input:focus {
+  border-bottom-color: gold;
+  outline: none;
+}
+
+.form-group input::placeholder {
+  color: #999;
+}
+
+.password-input-wrapper {
+  align-items: center;
+  display: flex;
+  position: relative;
+}
+
+.password-input-wrapper input {
+  padding-right: 40px;
+}
+
+.password-toggle {
+  cursor: pointer;
+  color: #666;
+  background: none;
+  border: none;
+  justify-content: center;
+  align-items: center;
+  padding: 8px;
+  transition: color .2s;
+  display: flex;
+  position: absolute;
+  right: 0;
+}
+
+.password-toggle:hover {
+  color: #000;
+}
+
+.password-toggle svg {
+  stroke-width: 1.5px;
+  width: 18px;
+  height: 18px;
+}
+
+.form-options {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: -8px;
+  font-size: 13px;
+  display: flex;
+}
+
+.checkbox-label {
+  cursor: pointer;
+  color: #666;
+  -webkit-user-select: none;
+  user-select: none;
+  align-items: center;
+  gap: 8px;
+  display: flex;
+}
+
+.checkbox-label input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: gold;
+  width: 16px;
+  height: 16px;
+}
+
+.forgot-password {
+  color: #666;
+  font-weight: 400;
+  text-decoration: none;
+  transition: color .2s;
+}
+
+.forgot-password:hover {
+  color: #000;
+}
+
+.login-button, .register-button {
+  color: gold;
+  cursor: pointer;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  background: #000;
+  border: 1px solid #000;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all .3s;
+  display: flex;
+}
+
+.login-button:hover:not(:disabled), .register-button:hover:not(:disabled) {
+  color: #000;
+  background: gold;
+}
+
+.login-button:active:not(:disabled), .register-button:active:not(:disabled) {
+  transform: scale(.98);
+}
+
+.login-button:disabled, .register-button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+}
+
+.spinner circle {
+  stroke: gold;
+}
+
+.login-right, .register-right {
+  background: #000;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  padding: 80px 60px;
+  display: flex;
+  position: relative;
+}
+
+.brand-section {
+  text-align: center;
+  max-width: 400px;
+}
+
+.brand-logo {
+  color: gold;
+  letter-spacing: 2px;
+  box-sizing: border-box;
+  border: 2px solid gold;
+  justify-content: center;
+  align-items: center;
+  min-width: 120px;
+  min-height: 120px;
+  margin: 0 auto 32px;
+  padding: 24px 40px;
+  font-size: 48px;
+  font-weight: 300;
+  display: inline-flex;
+}
+
+.brand-section h2 {
+  color: #fff;
+  letter-spacing: 2px;
+  margin: 0 0 16px;
+  font-size: 32px;
+  font-weight: 300;
+}
+
+.brand-section p {
+  color: #999;
+  letter-spacing: 1px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 1.6;
+}
+
+@media (min-width: 1200px) {
+  .login-left, .login-right, .register-left, .register-right {
+    padding: 100px 80px;
+  }
+
+  .login-content, .register-content {
+    max-width: 480px;
+  }
+}
+
+@media (max-width: 768px) {
+  .register-container {
+    flex-direction: column;
+  }
+
+  .register-right {
+    display: none;
+  }
+
+  .register-left {
+    padding: 40px 20px;
+  }
+}
+
+/*# sourceMappingURL=app_styles_auth_css_bad6b30c._.single.css.map*/
