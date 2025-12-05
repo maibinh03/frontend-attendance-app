@@ -79,7 +79,6 @@ export const authUtils = {
   },
 
   handleAuthError: (response: Response): boolean => {
-    // If unauthorized (401), clear auth and redirect to login
     if (response.status === 401) {
       authUtils.clearAuth()
       if (typeof window !== 'undefined') {
