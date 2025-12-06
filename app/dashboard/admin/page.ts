@@ -69,7 +69,6 @@ const AdminDashboardPage = (): ReactElement => {
   const [shouldLoadStats, setShouldLoadStats] = useState(false)
   const lastDateRef = useRef<string>('')
 
-  // 🟩 Chỉ render date ở client
   useEffect(() => {
     setMounted(true)
     const now = new Date()
@@ -92,8 +91,20 @@ const AdminDashboardPage = (): ReactElement => {
     setError(null)
 
     try {
-      const userList = await apiClient.get<User[]>('/api/users/users')
-      const arr = Array.isArray(userList) ? userList : []
+      const isResponseWithMeta = (
+        val: unknown
+      ): val is { success?: boolean; data?: User[] } =>
+        typeof val === 'object' && val !== null && !Array.isArray(val)
+
+      const response = await apiClient.get<{ success?: boolean; data?: User[] } | User[]>(
+        '/api/users/users'
+      )
+      const arr = Array.isArray(response) ? response : Array.isArray(response?.data) ? response.data ?? [] : []
+
+      if (isResponseWithMeta(response) && response.success === false) {
+        setError('Không thể tải danh sách người dùng')
+      }
+
       setUsers(arr)
 
       if (arr.length > 0 && !shouldLoadStats) {
@@ -184,11 +195,11 @@ const AdminDashboardPage = (): ReactElement => {
           // ⬅ Fix hydration: chỉ render user greeting khi đã mounted
           mounted && currentUser
             ? createElement(
-                'p',
-                { className: 'greeting' },
-                'Xin chào, ',
-                currentUser.fullName ?? currentUser.username
-              )
+              'p',
+              { className: 'greeting' },
+              'Xin chào, ',
+              currentUser.fullName ?? currentUser.username
+            )
             : null
         ),
         createElement(
@@ -224,11 +235,11 @@ const AdminDashboardPage = (): ReactElement => {
             { className: 'admin-btn secondary', onClick: loadUsers, disabled: isLoading },
             isLoading
               ? createElement(
-                  Fragment,
-                  null,
-                  createElement('span', { className: 'admin-loading', style: { marginRight: '8px' } }),
-                  'Đang tải...'
-                )
+                Fragment,
+                null,
+                createElement('span', { className: 'admin-loading', style: { marginRight: '8px' } }),
+                'Đang tải...'
+              )
               : '🔄 Làm mới'
           )
         ),
@@ -265,11 +276,11 @@ const AdminDashboardPage = (): ReactElement => {
             { className: 'admin-btn secondary', onClick: loadStatistics, disabled: statsLoading },
             statsLoading
               ? createElement(
-                  Fragment,
-                  null,
-                  createElement('span', { className: 'admin-loading', style: { marginRight: '8px' } }),
-                  'Đang tải...'
-                )
+                Fragment,
+                null,
+                createElement('span', { className: 'admin-loading', style: { marginRight: '8px' } }),
+                'Đang tải...'
+              )
               : '🔄 Cập nhật'
           )
         ),
@@ -280,21 +291,21 @@ const AdminDashboardPage = (): ReactElement => {
 
         !statsLoading && statistics && statCards.length > 0
           ? createElement(
-              'div',
-              { className: 'admin-stats-grid' },
-              statCards.map((card) =>
+            'div',
+            { className: 'admin-stats-grid' },
+            statCards.map((card) =>
+              createElement(
+                'div',
+                { key: card.label, className: 'admin-stat-card' },
+                createElement('p', { className: 'admin-stat-label' }, `${card.icon} ${card.label}`),
                 createElement(
-                  'div',
-                  { key: card.label, className: 'admin-stat-card' },
-                  createElement('p', { className: 'admin-stat-label' }, `${card.icon} ${card.label}`),
-                  createElement(
-                    'p',
-                    { className: `admin-stat-value ${typeof card.value === 'string' ? 'small' : ''}` },
-                    card.value
-                  )
+                  'p',
+                  { className: `admin-stat-value ${typeof card.value === 'string' ? 'small' : ''}` },
+                  card.value
                 )
               )
             )
+          )
           : null,
 
         !statsLoading && !statistics
@@ -320,11 +331,11 @@ const AdminDashboardPage = (): ReactElement => {
             { className: 'admin-btn secondary', onClick: loadUsers, disabled: isLoading },
             isLoading
               ? createElement(
-                  Fragment,
-                  null,
-                  createElement('span', { className: 'admin-loading', style: { marginRight: '8px' } }),
-                  'Đang tải...'
-                )
+                Fragment,
+                null,
+                createElement('span', { className: 'admin-loading', style: { marginRight: '8px' } }),
+                'Đang tải...'
+              )
               : '🔄 Làm mới'
           )
         ),
@@ -332,41 +343,41 @@ const AdminDashboardPage = (): ReactElement => {
         isLoading
           ? createElement('p', { className: 'admin-placeholder' }, 'Đang tải danh sách người dùng...')
           : createElement(
-              'div',
-              { className: 'admin-table-wrapper' },
+            'div',
+            { className: 'admin-table-wrapper' },
+            createElement(
+              'table',
+              { className: 'admin-table' },
               createElement(
-                'table',
-                { className: 'admin-table' },
+                'thead',
+                null,
                 createElement(
-                  'thead',
+                  'tr',
                   null,
-                  createElement(
+                  createElement('th', null, 'ID'),
+                  createElement('th', null, 'Tên đăng nhập'),
+                  createElement('th', null, 'Họ tên'),
+                  createElement('th', null, 'Email'),
+                  createElement('th', null, 'Vai trò')
+                )
+              ),
+              createElement(
+                'tbody',
+                null,
+                users.length === 0
+                  ? createElement(
                     'tr',
                     null,
-                    createElement('th', null, 'ID'),
-                    createElement('th', null, 'Tên đăng nhập'),
-                    createElement('th', null, 'Họ tên'),
-                    createElement('th', null, 'Email'),
-                    createElement('th', null, 'Vai trò')
+                    createElement(
+                      'td',
+                      { colSpan: 5 },
+                      createElement('div', { className: 'admin-placeholder' }, 'Chưa có người dùng nào')
+                    )
                   )
-                ),
-                createElement(
-                  'tbody',
-                  null,
-                  users.length === 0
-                    ? createElement(
-                        'tr',
-                        null,
-                        createElement(
-                          'td',
-                          { colSpan: 5 },
-                          createElement('div', { className: 'admin-placeholder' }, 'Chưa có người dùng nào')
-                        )
-                      )
-                    : users.map((u) => createElement(UserRow, { key: u.id, user: u }))
-                )
+                  : users.map((u) => createElement(UserRow, { key: u.id, user: u }))
               )
             )
+          )
       )
     )
   )
