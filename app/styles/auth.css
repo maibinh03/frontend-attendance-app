@@ -149,17 +149,6 @@
   accent-color: #FFD700;
 }
 
-.forgot-password {
-  color: #666666;
-  text-decoration: none;
-  font-weight: 400;
-  transition: color 0.2s;
-}
-
-.forgot-password:hover {
-  color: #000000;
-}
-
 .login-button,
 .register-button {
   width: 100%;

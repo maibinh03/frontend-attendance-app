@@ -146,8 +146,7 @@ const LoginPage = (): ReactElement => {
                                 onChange: (event: React.ChangeEvent<HTMLInputElement>) => setRememberMe(event.target.checked)
                             }),
                             createElement('span', null, 'Ghi nhớ đăng nhập')
-                        ),
-                        createElement('a', { className: 'forgot-password', href: '#' }, 'Quên mật khẩu?')
+                        )
                     ),
                     createElement(
                         'div',
