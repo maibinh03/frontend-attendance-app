@@ -103,6 +103,7 @@ const UserDashboardPage = (): ReactElement => {
   const [isChecking, setIsChecking] = useState(false)
   const [isLoadingPeers, setIsLoadingPeers] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [showUserPicker, setShowUserPicker] = useState(false)
   const today = useMemo(() => getTodayString(), [])
   const formatFilterDate = useCallback((value: string): string => {
     if (!value) return '---'
@@ -133,6 +134,36 @@ const UserDashboardPage = (): ReactElement => {
 
     return Array.from(dedup.values())
   }, [currentUser, peers])
+  const userChoices = useMemo(() => {
+    const options: Array<{ id: 'me' | number; label: string }> = [
+      {
+        id: 'me',
+        label: formatUserOptionLabel(
+          {
+            fullName: currentUser?.fullName,
+            username: currentUser?.username,
+            id: currentUser?.id,
+            isSelf: true
+          },
+          'Bạn'
+        )
+      }
+    ]
+
+    peerOptions
+      .filter((p) => (currentUser ? p.id !== currentUser.id : true))
+      .forEach((p) => {
+        options.push({
+          id: p.id,
+          label: formatUserOptionLabel(
+            { fullName: p.fullName, username: p.username, id: p.id, isSelf: Boolean(p.isSelf) },
+            `User #${p.id}`
+          )
+        })
+      })
+
+    return options
+  }, [currentUser, peerOptions])
   const selectedUserDisplay = useMemo(() => {
     if (isViewingSelf) {
       return currentUser?.fullName ?? currentUser?.username ?? 'bạn'
@@ -163,6 +194,7 @@ const UserDashboardPage = (): ReactElement => {
   const canCheckInOut = useMemo(() => Boolean(currentUser && isViewingSelf), [currentUser, isViewingSelf])
   const [message, setMessage] = useState<MessageState>(null)
   const messageTimeoutRef = useRef<number | null>(null)
+  const userPickerRef = useRef<HTMLDivElement | null>(null)
 
   const totalHours = useMemo(() => {
     const hours = records.reduce((sum, record) => {
@@ -223,6 +255,22 @@ const UserDashboardPage = (): ReactElement => {
   useEffect(() => {
     setCurrentPage(1)
   }, [records])
+
+  useEffect(() => {
+    if (!showUserPicker) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!userPickerRef.current) return
+      if (event.target instanceof Node && !userPickerRef.current.contains(event.target)) {
+        setShowUserPicker(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showUserPicker])
 
   useEffect(() => {
     if (status !== 'IN' || !activeRecord?.checkInTime) {
@@ -315,6 +363,11 @@ const UserDashboardPage = (): ReactElement => {
     if (!currentUser) return
     fetchAttendance()
   }, [currentUser, fetchAttendance, selectedUserId])
+
+  const handleUserSelect = useCallback((userId: 'me' | number) => {
+    setSelectedUserId(userId)
+    setShowUserPicker(false)
+  }, [])
 
   const handleLogout = useCallback(() => {
     authUtils.clearAuth()
@@ -445,16 +498,74 @@ const UserDashboardPage = (): ReactElement => {
             'div',
             { className: 'ritzy-top-actions' },
             createElement(
-              'span',
-              { className: 'ritzy-calendar-chip' },
-              `Đang xem: ${isViewingSelf ? 'Bạn' : selectedUserDisplay}`
+              'div',
+              {
+                className: 'ritzy-user-switcher',
+                ref: userPickerRef,
+                style: { position: 'relative' }
+              },
+              createElement(
+                'button',
+                {
+                  type: 'button',
+                  className: 'ritzy-calendar-chip',
+                  onClick: () => setShowUserPicker((prev) => !prev),
+                  disabled: isLoadingPeers
+                },
+                createElement('span', null, `Đang xem: ${isViewingSelf ? 'Bạn' : selectedUserDisplay}`),
+                createElement('span', { className: 'ritzy-chip-action' }, isLoadingPeers ? 'Đang tải...' : showUserPicker ? 'Đóng' : 'Đổi')
+              ),
+              showUserPicker
+                ? createElement(
+                  'div',
+                  {
+                    className: 'ritzy-user-menu',
+                    style: {
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      background: 'var(--ritzy-surface, #fff)',
+                      border: '1px solid var(--ritzy-border, #e5e7eb)',
+                      boxShadow: '0 10px 25px rgba(0, 0, 0, 0.08)',
+                      borderRadius: '12px',
+                      padding: '8px',
+                      minWidth: '220px',
+                      zIndex: 10
+                    }
+                  },
+                  userChoices.map((choice) =>
+                    createElement(
+                      'button',
+                      {
+                        key: choice.id === 'me' ? 'me' : String(choice.id),
+                        type: 'button',
+                        className: `ritzy-user-menu-item${selectedUserId === choice.id ? ' active' : ''}`,
+                        onClick: () => handleUserSelect(choice.id),
+                        style: {
+                          width: '100%',
+                          textAlign: 'left',
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: selectedUserId === choice.id ? 'var(--ritzy-muted, #f1f5f9)' : 'transparent',
+                          cursor: 'pointer'
+                        }
+                      },
+                      choice.label
+                    )
+                  )
+                )
+                : null
             ),
             createElement(
               'button',
               {
                 className: 'ritzy-btn ghost',
                 type: 'button',
-                onClick: () => setShowFilters((prev) => !prev)
+                onClick: () => {
+                  setShowFilters((prev) => !prev)
+                  setShowUserPicker(false)
+                }
               },
               'Bộ lọc'
             ),
@@ -468,47 +579,6 @@ const UserDashboardPage = (): ReactElement => {
             createElement(
               'div',
               { className: 'ritzy-filter-grid' },
-              createElement(
-                'label',
-                null,
-                'Người dùng',
-                createElement(
-                  'select',
-                  {
-                    value: selectedUserId === 'me' ? 'me' : String(selectedUserId),
-                    onChange: (e) => {
-                      const value = (e.target as HTMLSelectElement).value
-                      setSelectedUserId(value === 'me' ? 'me' : Number(value))
-                    },
-                    disabled: isLoading || isLoadingPeers
-                  },
-                  createElement(
-                    'option',
-                    { value: 'me' },
-                    formatUserOptionLabel(
-                      {
-                        fullName: currentUser?.fullName,
-                        username: currentUser?.username,
-                        id: currentUser?.id,
-                        isSelf: true
-                      },
-                      'Bạn'
-                    )
-                  ),
-                  peerOptions
-                    .filter((p) => currentUser ? p.id !== currentUser.id : true)
-                    .map((p) =>
-                      createElement(
-                        'option',
-                        { key: p.id, value: String(p.id) },
-                        formatUserOptionLabel(
-                          { fullName: p.fullName, username: p.username, id: p.id, isSelf: Boolean(p.isSelf) },
-                          `User #${p.id}`
-                        )
-                      )
-                    )
-                )
-              ),
               createElement(
                 'label',
                 null,
