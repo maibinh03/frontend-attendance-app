@@ -508,7 +508,7 @@ const UserDashboardPage = (): ReactElement => {
                 'button',
                 {
                   type: 'button',
-                  className: 'ritzy-calendar-chip',
+                  className: 'ritzy-btn ghost',
                   onClick: () => setShowUserPicker((prev) => !prev),
                   disabled: isLoadingPeers
                 },
