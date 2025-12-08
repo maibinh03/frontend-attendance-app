@@ -513,7 +513,7 @@ const UserDashboardPage = (): ReactElement => {
                   disabled: isLoadingPeers
                 },
                 createElement('span', null, `Đang xem: ${isViewingSelf ? 'Bạn' : selectedUserDisplay}`),
-                createElement('span', { className: 'ritzy-chip-action' }, isLoadingPeers ? 'Đang tải...' : showUserPicker ? 'Đóng' : 'Đổi')
+                createElement('span', { className: 'ritzy-chip-action' }, isLoadingPeers ? 'Đang tải...' : showUserPicker ? ' Đóng' : ' Đổi')
               ),
               showUserPicker
                 ? createElement(
