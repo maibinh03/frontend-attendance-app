@@ -1,5 +1,6 @@
 import { createElement, type ReactNode, type ReactElement } from 'react'
 import type { Metadata } from 'next'
+import './globals.css'
 import './styles/base.css'
 import './styles/auth.css'
 import './styles/admin-dashboard.css'

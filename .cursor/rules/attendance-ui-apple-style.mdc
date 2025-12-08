@@ -1,0 +1,131 @@
+---
+description: >
+  Full reset & redesign for Attendance UI (Check-in / Attendance History / Summary),
+  applying Apple-style minimalism and clean design.
+  Cursor is allowed to delete 100% of old layout AND 100% of CSS,
+  and rebuild from scratch with a new design system.
+  Business logic MUST remain untouched.
+globs:
+  - "src/**/Attendance*.tsx"
+  - "src/**/attendance*.tsx"
+  - "src/**/*.css"
+  - "src/**/*.scss"
+alwaysApply: false
+---
+
+# 🔒 NON-NEGOTIABLE RULES (Logic Safety)
+- Do NOT modify:
+  - business logic
+  - states or state variable names
+  - handlers (checkIn, checkOut, loadData…)
+  - TypeScript interfaces
+  - API calls
+- You MAY:
+  - remove all JSX layout
+  - remove all CSS
+  - remove all HTML structure
+  - rebuild a 100% new UI + CSS
+  - create new classNames, design tokens, and layout structures
+
+# 🎨 APPLE DESIGN PRINCIPLES
+- Minimalistic surfaces using translucency + blur
+- Light shadows, subtle depth
+- White/neutral backgrounds (#FFFFFF / #F8F8F8 / #EFEFF4)
+- Rounded corners (12–20px)
+- Spacing scale: 12 / 16 / 24 / 32 / 40
+- Typography scale:
+  - Headline: 24–28 semibold
+  - Title: 20 semibold
+  - Subhead: 16 medium
+  - Body: 15 regular
+  - Caption: 13 regular
+- One accent color only (primary)
+- High-contrast primary CTA
+- Motion-light transitions
+
+# 📐 PAGE STRUCTURE (APPLE STANDARD FLOW)
+## (1) Top bar (fixed)
+- Translucent with blur (backdrop-filter)
+- Left: Back button
+- Center: “Chấm công #<id>”
+- Right: Logout button
+- Thin active underline when viewing your own data
+
+## (2) Inline message surface
+- Appears right under top bar
+- Soft success/error containers
+- Rounded, subtle shadow
+- Auto-animate height
+
+## (3) Hero Check-in Card
+- Largest element
+- Shows:
+  - Status badge: “Đang rảnh” / “Đang làm việc”
+  - Current session timer (live)
+  - Total sessions today (or current viewing user)
+- One dominant primary CTA:
+  - Check-in
+  - Check-out
+- If viewing another user → disable CTA + subtle notice
+- Card style:
+  - Big padding (24–32)
+  - Rounded 20px
+  - Shadow level 1
+  - Clean hierarchy
+
+## (4) Attendance History Block
+- Section title + record count
+- Filter toolbar:
+  - Date range inputs
+  - Quick chips: Today / This week / This month
+  - Reset chip
+- Active filters displayed as chips
+- Table:
+  - Columns: Date | Check-in | Check-out | Duration | Status
+  - Soft zebra rows
+  - Rounded corners
+  - Apple-style comfortable row height (44px)
+- Loading → skeleton shimmer
+- Empty → soft placeholder (icon + text)
+
+## (5) Summary Cards
+- 3 cards:
+  - Tổng giờ
+  - Số phiên
+  - Thời lượng TB
+- Rounded 16px
+- Light shadow
+- Strong numeric display (28px semibold)
+- Auto layout:
+  - Mobile → stack
+  - Desktop → responsive grid
+
+# 📱 RESPONSIVE RULES
+- Mobile (≤ 480px): vertical stack
+- Tablet (480–900px): 1.5 column
+- Desktop (≥ 900px): hero aside, history full width, summary grid
+- Container max width: 1080–1280px centered
+
+# 🎛 CSS RULES
+- You MAY:
+  - wipe old CSS completely
+  - create new .css/.scss files
+  - create a new design token system
+  - rename all CSS classes
+
+- You MUST:
+  - keep className usage consistent with JSX you generate
+  - avoid inline styles unless necessary
+  - maintain dark-mode compatibility placeholder (optional)
+
+# 🧪 IMPLEMENTATION STEPS (MANDATORY)
+1. Propose a wireframe layout as structured text (NO CODE).
+2. Wait for user approval.
+3. Rewrite ALL JSX markup based on approved wireframe.
+4. Rewrite ALL CSS with new clean Apple-style system.
+5. Verify:
+   - logic untouched
+   - handlers untouched
+   - UI fully replaced
+   - responsive working
+   - accessibility OK
