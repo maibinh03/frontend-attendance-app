@@ -96,9 +96,7 @@ const AdminDashboardPage = (): ReactElement => {
       ): val is { success?: boolean; data?: User[] } =>
         typeof val === 'object' && val !== null && !Array.isArray(val)
 
-      const response = await apiClient.get<{ success?: boolean; data?: User[] } | User[]>(
-        '/api/users/users'
-      )
+      const response = await apiClient.get<{ success?: boolean; data?: User[] } | User[]>('/api/users')
       const arr = Array.isArray(response) ? response : Array.isArray(response?.data) ? response.data ?? [] : []
 
       if (isResponseWithMeta(response) && response.success === false) {

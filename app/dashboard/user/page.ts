@@ -1,14 +1,24 @@
 'use client'
 
-import { createElement, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import {
+  createElement,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactElement
+} from 'react'
+import { useRouter } from 'next/navigation'
+import { USER_ROLES, authUtils } from '@/lib/auth'
+import { apiClient } from '@/lib/api'
+import { formatDate, formatDateTime, formatTotalHours } from '@/lib/utils/format'
+import { MESSAGE_TIMEOUT } from '@/lib/constants'
+import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 export const dynamic = 'force-dynamic'
-import { useRouter } from 'next/navigation'
-import { authUtils } from '@/lib/auth'
-import { apiClient } from '@/lib/api'
-import { formatTime, formatDate, formatDateTime, formatTotalHours } from '@/lib/utils/format'
-import { INTERVAL_TIMES, MESSAGE_TIMEOUT, ATTENDANCE_HISTORY_LIMIT } from '@/lib/constants'
-import { useRequireAuth } from '@/hooks/useRequireAuth'
 
 interface Attendance {
   id: number
@@ -21,61 +31,170 @@ interface Attendance {
   notes: string | null
 }
 
+interface PeerUser {
+  id: number
+  username: string
+  fullName?: string
+  role?: string
+  isSelf?: boolean
+}
+
 type MessageState = { type: 'success' | 'error'; text: string } | null
 
-const headerButtonStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px',
-  alignItems: 'flex-end'
-} as const
+const HISTORY_PAGE_SIZE = 3
+const formatElapsedDuration = (seconds: number): string => {
+  const totalSeconds = Math.max(0, seconds)
+  const hrs = Math.floor(totalSeconds / 3600)
+  const mins = Math.floor((totalSeconds % 3600) / 60)
+  const secs = totalSeconds % 60
+  return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+const getTodayString = (): string => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
-const HistoryRow = memo<{ attendance: Attendance }>(({ attendance }) => {
-  // Format dates only on client side to avoid hydration mismatch
-  const formattedWorkDate = typeof window !== 'undefined'
-    ? formatDate(new Date(attendance.workDate))
-    : ''
-  const formattedCheckIn = typeof window !== 'undefined' && attendance.checkInTime
-    ? formatDateTime(attendance.checkInTime)
-    : '--'
-  const formattedCheckOut = typeof window !== 'undefined' && attendance.checkOutTime
-    ? formatDateTime(attendance.checkOutTime)
-    : '--'
+const formatUserOptionLabel = (
+  user: { fullName?: string; username?: string; id?: number; isSelf?: boolean },
+  fallback: string
+): string => {
+  const baseName = user.fullName && user.username
+    ? `${user.fullName} (${user.username})`
+    : user.fullName || user.username || fallback
+  return user.isSelf ? `${baseName} - người dùng hiện tại` : baseName
+}
 
-  return createElement(
+const HistoryRow = memo<{ attendance: Attendance }>(({ attendance }) =>
+  createElement(
     'tr',
     null,
-    createElement('td', { suppressHydrationWarning: true }, formattedWorkDate),
-    createElement('td', { suppressHydrationWarning: true }, formattedCheckIn),
-    createElement('td', { suppressHydrationWarning: true }, formattedCheckOut),
-    createElement('td', null, formatTotalHours(attendance.totalHours)),
+    createElement('td', { suppressHydrationWarning: true }, formatDate(new Date(attendance.workDate))),
+    createElement('td', { suppressHydrationWarning: true }, attendance.checkInTime ? formatDateTime(attendance.checkInTime) : '--'),
+    createElement('td', { suppressHydrationWarning: true }, attendance.checkOutTime ? formatDateTime(attendance.checkOutTime) : '--'),
+    createElement('td', null, formatTotalHours(attendance.totalHours ?? null)),
     createElement(
       'td',
       null,
       createElement('span', { className: `ritzy-badge ${attendance.status}` }, attendance.status)
     )
   )
-})
+)
 HistoryRow.displayName = 'HistoryRow'
 
 const UserDashboardPage = (): ReactElement => {
   const router = useRouter()
   const currentUser = useRequireAuth()
-  // Initialize with null to avoid hydration mismatch, set in useEffect
-  const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  const [currentDate, setCurrentDate] = useState<Date | null>(null)
-  const lastDateRef = useRef<string>('')
-  const [todayAttendance, setTodayAttendance] = useState<Attendance | null>(null)
-  const [attendanceHistory, setAttendanceHistory] = useState<Attendance[]>([])
-  const [isTodayLoading, setIsTodayLoading] = useState(false)
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false)
+
+  const [records, setRecords] = useState<Attendance[]>([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [status, setStatus] = useState<'IN' | 'OUT'>('OUT')
+  const [activeRecord, setActiveRecord] = useState<Attendance | null>(null)
+  const [peers, setPeers] = useState<PeerUser[]>([])
+  const [selectedUserId, setSelectedUserId] = useState<'me' | number>('me')
+  const [filters, setFilters] = useState<{ startDate: string; endDate: string }>(() => {
+    const todayStr = getTodayString()
+    return { startDate: todayStr, endDate: todayStr }
+  })
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [isLoading, setIsLoading] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  const [isLoadingPeers, setIsLoadingPeers] = useState(false)
+  const [showFilters, setShowFilters] = useState(false)
+  const today = useMemo(() => getTodayString(), [])
+  const formatFilterDate = useCallback((value: string): string => {
+    if (!value) return '---'
+    const [year, month, day] = value.split('-')
+    if (!year || !month || !day) return value
+    return `${day}-${month}-${year}`
+  }, [])
+  const isViewingSelf = useMemo(() => {
+    if (!currentUser) return selectedUserId === 'me'
+    return selectedUserId === 'me' || selectedUserId === currentUser.id
+  }, [currentUser, selectedUserId])
+  const peerOptions = useMemo(() => {
+    const list = [...peers]
+    if (currentUser && !list.some((p) => p.id === currentUser.id)) {
+      list.unshift({
+        id: currentUser.id,
+        username: currentUser.username,
+        fullName: currentUser.fullName,
+        role: currentUser.role,
+        isSelf: true
+      })
+    }
+
+    const dedup = new Map<number, PeerUser>()
+    list.forEach((u) => {
+      dedup.set(u.id, u)
+    })
+
+    return Array.from(dedup.values())
+  }, [currentUser, peers])
+  const selectedUserDisplay = useMemo(() => {
+    if (isViewingSelf) {
+      return currentUser?.fullName ?? currentUser?.username ?? 'bạn'
+    }
+    const peer = typeof selectedUserId === 'number'
+      ? peerOptions.find((p) => p.id === selectedUserId)
+      : undefined
+    if (peer) return peer.fullName || peer.username || `User #${peer.id}`
+    if (typeof selectedUserId === 'number') return `User #${selectedUserId}`
+    return 'người dùng'
+  }, [currentUser, isViewingSelf, peerOptions, selectedUserId])
+  const historyTitle = useMemo(() => {
+    const start = filters.startDate || today
+    const end = filters.endDate || today
+    const isDefaultToday = start === today && end === today
+
+    if (isDefaultToday) {
+      return `Nhật ký của ${isViewingSelf ? 'bạn' : selectedUserDisplay} (ngày ${formatFilterDate(today)})`
+    }
+
+    if (filters.startDate || filters.endDate) {
+      const resolvedEndDate = filters.endDate || today
+      return `Nhật ký của ${isViewingSelf ? 'bạn' : selectedUserDisplay} từ ${formatFilterDate(filters.startDate)} đến ${formatFilterDate(resolvedEndDate)}`
+    }
+
+    return `Nhật ký của ${isViewingSelf ? 'bạn' : selectedUserDisplay} (đến ${formatFilterDate(today)})`
+  }, [filters.endDate, filters.startDate, formatFilterDate, isViewingSelf, selectedUserDisplay, today])
+  const canCheckInOut = useMemo(() => Boolean(currentUser && isViewingSelf), [currentUser, isViewingSelf])
   const [message, setMessage] = useState<MessageState>(null)
   const messageTimeoutRef = useRef<number | null>(null)
 
-  const formattedTime = useMemo(() => currentTime ? formatTime(currentTime) : '--:--', [currentTime])
-  const formattedDate = useMemo(() => currentDate ? formatDate(currentDate) : '', [currentDate])
+  const totalHours = useMemo(() => {
+    const hours = records.reduce((sum, record) => {
+      if (!record.checkInTime || !record.checkOutTime) return sum
+      const start = new Date(record.checkInTime).getTime()
+      const end = new Date(record.checkOutTime).getTime()
+      if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return sum
+      return sum + (end - start) / (1000 * 60 * 60)
+    }, 0)
+    return Math.round(hours * 100) / 100
+  }, [records])
+
+  const lastRecord = useMemo(() => {
+    if (!records.length) return null
+    if (activeRecord) {
+      const other = records.find((rec) => rec.id !== activeRecord.id)
+      return other ?? activeRecord
+    }
+    return records[0]
+  }, [activeRecord, records])
+
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(records.length / HISTORY_PAGE_SIZE)), [records.length])
+
+  const paginatedRecords = useMemo(() => {
+    const start = (currentPage - 1) * HISTORY_PAGE_SIZE
+    return records.slice(start, start + HISTORY_PAGE_SIZE)
+  }, [currentPage, records])
+
+  const sessionTimerText = useMemo(() => {
+    if (status !== 'IN' || !activeRecord?.checkInTime) return 'Chưa bắt đầu'
+    return formatElapsedDuration(elapsedSeconds)
+  }, [activeRecord?.checkInTime, elapsedSeconds, status])
 
   const pushMessage = useCallback((payload: MessageState) => {
     if (messageTimeoutRef.current) {
@@ -102,149 +221,182 @@ const UserDashboardPage = (): ReactElement => {
   }, [])
 
   useEffect(() => {
-    // Initialize time and date on client side to avoid hydration mismatch
-    const now = new Date()
-    setCurrentTime(now)
-    setCurrentDate(now)
-    lastDateRef.current = now.toDateString()
+    setCurrentPage(1)
+  }, [records])
 
-    // Update time every minute (only shows hour:minute to reduce lag)
-    const timeTimer = window.setInterval(() => {
-      const now = new Date()
-      setCurrentTime(now)
-      const nowDateStr = now.toDateString()
-      if (nowDateStr !== lastDateRef.current) {
-        lastDateRef.current = nowDateStr
-        setCurrentDate(now)
+  useEffect(() => {
+    if (status !== 'IN' || !activeRecord?.checkInTime) {
+      setElapsedSeconds(0)
+      return
+    }
+
+    const startMs = new Date(activeRecord.checkInTime).getTime()
+    if (Number.isNaN(startMs)) {
+      setElapsedSeconds(0)
+      return
+    }
+
+    const updateElapsed = () => {
+      const diff = Date.now() - startMs
+      const seconds = Math.max(0, Math.floor(diff / 1000))
+      setElapsedSeconds(seconds)
+    }
+
+    updateElapsed()
+    const intervalId = window.setInterval(updateElapsed, 1000)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [activeRecord?.checkInTime, status])
+
+  const buildQueryString = useCallback(
+    (user: 'me' | number, start?: string, end?: string) => {
+      const params = new URLSearchParams({ userId: user === 'me' ? 'me' : String(user) })
+      const startDate = start?.trim()
+      const endDate = (end ?? '').trim() || today
+      if (startDate) params.append('from', startDate)
+      if (endDate) params.append('to', endDate)
+      return params.toString()
+    },
+    [today]
+  )
+
+  const fetchAttendance = useCallback(
+    async (payload?: { startDate?: string; endDate?: string; userId?: 'me' | number }) => {
+      if (!currentUser) return
+      const targetUserId = payload?.userId ?? selectedUserId
+      setIsLoading(true)
+      try {
+        const qs = buildQueryString(targetUserId, payload?.startDate ?? filters.startDate, payload?.endDate ?? filters.endDate)
+        const res = await apiClient.get<{
+          data?: Attendance[]
+          status?: 'IN' | 'OUT'
+          activeRecord?: Attendance | null
+        }>(`/api/attendance?${qs}`)
+
+        const data = res?.data ?? []
+        const sortedData = [...data].sort(
+          (a, b) => new Date(b.checkInTime).getTime() - new Date(a.checkInTime).getTime()
+        )
+
+        setRecords(sortedData)
+        setStatus(res?.status === 'IN' ? 'IN' : 'OUT')
+        setActiveRecord(res?.activeRecord ?? null)
+      } catch (err) {
+        console.error('Error fetching attendance:', err)
+        pushMessage({ type: 'error', text: 'Không thể tải dữ liệu chấm công' })
+      } finally {
+        setIsLoading(false)
       }
-    }, INTERVAL_TIMES.TIME_UPDATE)
-    return () => window.clearInterval(timeTimer)
-  }, [])
+    },
+    [buildQueryString, currentUser, filters.endDate, filters.startDate, pushMessage, selectedUserId]
+  )
 
-  const fetchTodayAttendance = useCallback(async () => {
+  const loadPeers = useCallback(async () => {
     if (!currentUser) return
-    setIsTodayLoading(true)
+    setIsLoadingPeers(true)
     try {
-      const data = await apiClient.get<{ data: Attendance | null }>('/api/attendance/today')
-      setTodayAttendance(data.data ?? null)
+      const res = await apiClient.get<{ data?: PeerUser[] }>('/api/users/peers')
+      setPeers(res?.data ?? [])
     } catch (err) {
-      console.error('Error fetching today attendance:', err)
+      console.error('Error loading peers:', err)
     } finally {
-      setIsTodayLoading(false)
-    }
-  }, [currentUser])
-
-  const fetchAttendanceHistory = useCallback(async () => {
-    if (!currentUser) return
-    setIsHistoryLoading(true)
-    try {
-      const data = await apiClient.get<{ data: Attendance[] }>(`/api/attendance/history?limit=${ATTENDANCE_HISTORY_LIMIT}`)
-      setAttendanceHistory(data.data ?? [])
-    } catch (err) {
-      console.error('Error fetching attendance history:', err)
-    } finally {
-      setIsHistoryLoading(false)
+      setIsLoadingPeers(false)
     }
   }, [currentUser])
 
   useEffect(() => {
     if (!currentUser) return
-    fetchTodayAttendance()
-  }, [currentUser, fetchTodayAttendance])
+    loadPeers()
+  }, [currentUser, loadPeers])
 
   useEffect(() => {
-    if (showHistory && currentUser) {
-      fetchAttendanceHistory()
-    }
-  }, [showHistory, currentUser, fetchAttendanceHistory])
+    if (!currentUser) return
+    fetchAttendance()
+  }, [currentUser, fetchAttendance, selectedUserId])
 
-  const handleLogout = useCallback((): void => {
+  const handleLogout = useCallback(() => {
     authUtils.clearAuth()
     router.replace('/login')
   }, [router])
 
-  const handleCheckIn = useCallback(async (): Promise<void> => {
-    if (!currentUser || todayAttendance) {
-      pushMessage({ type: 'error', text: 'Bạn đã chấm công vào hôm nay rồi' })
-      return
-    }
-
-    setIsChecking(true)
-    try {
-      await apiClient.post<{ message?: string }>('/api/attendance/checkin', {})
-      pushMessage({ type: 'success', text: 'Chấm công vào thành công!' })
-      await fetchTodayAttendance()
-      if (showHistory) {
-        await fetchAttendanceHistory()
-      }
-    } catch (err) {
-      const errorMessage = err && typeof err === 'object' && 'message' in err
-        ? String(err.message)
-        : 'Đã xảy ra lỗi khi chấm công vào'
-      pushMessage({ type: 'error', text: errorMessage })
-    } finally {
-      setIsChecking(false)
-    }
-  }, [currentUser, todayAttendance, pushMessage, fetchTodayAttendance, fetchAttendanceHistory, showHistory])
-
-  const handleCheckOut = useCallback(async (): Promise<void> => {
+  const handleCheckIn = useCallback(async () => {
     if (!currentUser) return
-    if (!todayAttendance) {
-      pushMessage({ type: 'error', text: 'Bạn chưa chấm công vào hôm nay' })
+    if (!canCheckInOut) {
+      pushMessage({ type: 'error', text: 'Bạn đang xem đồng nghiệp, không thể check-in thay họ.' })
       return
     }
-    if (todayAttendance.checkOutTime) {
-      pushMessage({ type: 'error', text: 'Bạn đã chấm công ra hôm nay rồi' })
+    if (status === 'IN') {
+      pushMessage({ type: 'error', text: 'Bạn đang trong phiên làm việc, hãy check-out trước.' })
       return
     }
 
     setIsChecking(true)
     try {
-      await apiClient.post<{ message?: string }>('/api/attendance/checkout', {})
-      pushMessage({ type: 'success', text: 'Chấm công ra thành công!' })
-      await fetchTodayAttendance()
-      if (showHistory) {
-        await fetchAttendanceHistory()
-      }
+      await apiClient.post('/api/attendance/checkin', {})
+      pushMessage({ type: 'success', text: 'Check-in thành công!' })
+      await fetchAttendance()
     } catch (err) {
       const errorMessage = err && typeof err === 'object' && 'message' in err
-        ? String(err.message)
-        : 'Đã xảy ra lỗi khi chấm công ra'
+        ? String((err as { message: string }).message)
+        : 'Không thể check-in'
       pushMessage({ type: 'error', text: errorMessage })
     } finally {
       setIsChecking(false)
     }
-  }, [currentUser, todayAttendance, pushMessage, fetchTodayAttendance, fetchAttendanceHistory, showHistory])
+  }, [canCheckInOut, currentUser, status, fetchAttendance, pushMessage])
 
-  const toggleHistory = useCallback((): void => {
-    setShowHistory((prev) => !prev)
-  }, [])
+  const handleCheckOut = useCallback(async () => {
+    if (!currentUser) return
+    if (!canCheckInOut) {
+      pushMessage({ type: 'error', text: 'Bạn đang xem đồng nghiệp, không thể check-out thay họ.' })
+      return
+    }
+    if (status === 'OUT') {
+      pushMessage({ type: 'error', text: 'Bạn chưa check-in' })
+      return
+    }
 
-  const todayStatus = useMemo(() => {
-    // Format dates only on client side to avoid hydration mismatch
-    const checkInValue = typeof window !== 'undefined' && todayAttendance?.checkInTime
-      ? formatDateTime(todayAttendance.checkInTime)
-      : '--/--'
-    const checkOutValue = typeof window !== 'undefined' && todayAttendance?.checkOutTime
-      ? formatDateTime(todayAttendance.checkOutTime)
-      : '--/--'
+    setIsChecking(true)
+    try {
+      await apiClient.post('/api/attendance/checkout', {})
+      pushMessage({ type: 'success', text: 'Check-out thành công!' })
+      await fetchAttendance()
+    } catch (err) {
+      const errorMessage = err && typeof err === 'object' && 'message' in err
+        ? String((err as { message: string }).message)
+        : 'Không thể check-out'
+      pushMessage({ type: 'error', text: errorMessage })
+    } finally {
+      setIsChecking(false)
+    }
+  }, [canCheckInOut, currentUser, status, fetchAttendance, pushMessage])
 
-    return [
-      {
-        label: 'Check-in',
-        value: checkInValue
-      },
-      {
-        label: 'Check-out',
-        value: checkOutValue
-      },
-      {
-        label: 'Tổng giờ',
-        value: formatTotalHours(todayAttendance?.totalHours)
-      },
-      { label: 'Ngày làm', value: formattedDate }
-    ]
-  }, [todayAttendance, formattedDate])
+  const handleFilterSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+      await fetchAttendance({ ...filters, userId: selectedUserId })
+      setShowFilters(false)
+    },
+    [fetchAttendance, filters, selectedUserId]
+  )
+
+  const handleResetFilters = useCallback(async () => {
+    setFilters({ startDate: today, endDate: today })
+    await fetchAttendance({ startDate: today, endDate: today, userId: selectedUserId })
+    setShowFilters(false)
+  }, [fetchAttendance, selectedUserId, today])
+
+  const handlePageChange = useCallback(
+    (nextPage: number) => {
+      const clamped = Math.min(Math.max(nextPage, 1), totalPages)
+      setCurrentPage(clamped)
+    },
+    [totalPages]
+  )
+
+  const canViewUsers = currentUser?.role === USER_ROLES.ADMIN || currentUser?.role === USER_ROLES.MANAGER
 
   return createElement(
     'div',
@@ -259,149 +411,150 @@ const UserDashboardPage = (): ReactElement => {
           'div',
           null,
           createElement('p', { className: 'ritzy-brand' }, 'Chấm công Bình Boong'),
-          createElement('p', { className: 'ritzy-subtitle' }, 'Một ngày làm việc vui vẻ hoặc không'),
           currentUser
-            ? createElement(
-              'p',
-              { className: 'ritzy-greeting' },
-              'Xin chào, ',
-              currentUser.fullName ?? currentUser.username
-            )
+            ? createElement('p', { className: 'ritzy-greeting' }, 'Xin chào, ', currentUser.fullName ?? currentUser.username)
             : null
         ),
         createElement(
           'div',
-          { style: headerButtonStyle },
-          createElement('span', { className: 'ritzy-calendar-chip', suppressHydrationWarning: true }, formattedDate),
+          { className: 'ritzy-top-actions' },
+          canViewUsers
+            ? createElement(
+              'button',
+              { className: 'ritzy-btn ghost', onClick: () => router.push('/users') },
+              'View All Users'
+            )
+            : null,
           createElement('button', { className: 'ritzy-btn', onClick: handleLogout }, 'Đăng xuất')
         )
       ),
-      message
-        ? createElement('div', { className: `ritzy-alert ${message.type}` }, message.text)
-        : null,
+      message ? createElement('div', { className: `ritzy-alert ${message.type}` }, message.text) : null,
       createElement(
-        'div',
-        { className: 'ritzy-content-grid' },
+        'section',
+        { className: 'ritzy-history' },
         createElement(
-          'section',
-          { className: 'ritzy-hero' },
-          createElement('p', { className: 'ritzy-hero-kicker' }, 'Thời gian hệ thống:'),
-          createElement('div', { className: 'ritzy-hero-clock', suppressHydrationWarning: true }, formattedTime),
-          createElement('p', { className: 'ritzy-hero-caption' }, 'Đồng hồ chấm công'),
+          'header',
+          null,
           createElement(
             'div',
-            { className: 'ritzy-hero-meta' },
-            createElement('span', { suppressHydrationWarning: true }, formattedDate),
+            null,
+            createElement('p', { className: 'ritzy-overline' }, 'Lịch sử chấm công'),
+            createElement('h2', { className: 'ritzy-panel-title' }, historyTitle)
+          ),
+          createElement(
+            'div',
+            { className: 'ritzy-top-actions' },
             createElement(
               'span',
-              null,
-              todayAttendance ? 'Sẵn sàng hoàn tất ngày làm việc' : 'Đã đến giờ bắt đầu ngày mới'
+              { className: 'ritzy-calendar-chip' },
+              `Đang xem: ${isViewingSelf ? 'Bạn' : selectedUserDisplay}`
             ),
-            todayAttendance?.checkInTime
-              ? createElement('span', { suppressHydrationWarning: true }, `Đã check-in: ${formatDateTime(todayAttendance.checkInTime)}`)
-              : null
+            createElement(
+              'button',
+              {
+                className: 'ritzy-btn ghost',
+                type: 'button',
+                onClick: () => setShowFilters((prev) => !prev)
+              },
+              'Bộ lọc'
+            ),
+            createElement('span', { className: 'ritzy-calendar-chip' }, `${records.length} phiên`)
           )
         ),
-        createElement(
-          'section',
-          { className: 'ritzy-panel' },
-          createElement(
-            'div',
-            { className: 'ritzy-panel-header' },
+        showFilters
+          ? createElement(
+            'form',
+            { className: 'ritzy-filter-form', onSubmit: handleFilterSubmit },
             createElement(
               'div',
-              null,
-              createElement('p', { className: 'ritzy-overline' }, 'Hôm nay'),
-              createElement('h2', { className: 'ritzy-panel-title' }, 'Trạng thái làm việc')
-            )
-          ),
-          isTodayLoading
-            ? createElement('p', { className: 'ritzy-placeholder' }, 'Đang tải thông tin hôm nay...')
-            : createElement(
-              'div',
-              { className: 'user-status-grid' },
-              todayStatus.map((item) =>
+              { className: 'ritzy-filter-grid' },
+              createElement(
+                'label',
+                null,
+                'Người dùng',
                 createElement(
-                  'div',
-                  { key: item.label, className: 'user-status-row' },
-                  createElement('span', null, item.label),
-                  createElement('strong', null, item.value)
+                  'select',
+                  {
+                    value: selectedUserId === 'me' ? 'me' : String(selectedUserId),
+                    onChange: (e) => {
+                      const value = (e.target as HTMLSelectElement).value
+                      setSelectedUserId(value === 'me' ? 'me' : Number(value))
+                    },
+                    disabled: isLoading || isLoadingPeers
+                  },
+                  createElement(
+                    'option',
+                    { value: 'me' },
+                    formatUserOptionLabel(
+                      {
+                        fullName: currentUser?.fullName,
+                        username: currentUser?.username,
+                        id: currentUser?.id,
+                        isSelf: true
+                      },
+                      'Bạn'
+                    )
+                  ),
+                  peerOptions
+                    .filter((p) => currentUser ? p.id !== currentUser.id : true)
+                    .map((p) =>
+                      createElement(
+                        'option',
+                        { key: p.id, value: String(p.id) },
+                        formatUserOptionLabel(
+                          { fullName: p.fullName, username: p.username, id: p.id, isSelf: Boolean(p.isSelf) },
+                          `User #${p.id}`
+                        )
+                      )
+                    )
                 )
+              ),
+              createElement(
+                'label',
+                null,
+                'Start date',
+                createElement('input', {
+                  type: 'date',
+                  value: filters.startDate,
+                  onChange: (e) => setFilters((prev) => ({ ...prev, startDate: e.target.value }))
+                })
+              ),
+              createElement(
+                'label',
+                null,
+                'End date',
+                createElement('input', {
+                  type: 'date',
+                  value: filters.endDate,
+                  onChange: (e) => setFilters((prev) => ({ ...prev, endDate: e.target.value }))
+                })
+              )
+            ),
+            createElement(
+              'div',
+              { className: 'ritzy-filter-actions' },
+              createElement('button', { type: 'submit', className: 'ritzy-btn', disabled: isLoading }, isLoading ? 'Đang lọc...' : 'Áp dụng'),
+              createElement(
+                'button',
+                {
+                  type: 'button',
+                  className: 'ritzy-btn ghost',
+                  onClick: handleResetFilters,
+                  disabled: isLoading
+                },
+                'Xóa lọc'
               )
             )
-        )
-      ),
-      createElement(
-        'div',
-        { className: 'ritzy-grid' },
-        createElement(
-          'article',
-          {
-            className: `ritzy-action-card ${todayAttendance ? 'disabled' : ''}`,
-            'aria-disabled': Boolean(todayAttendance)
-          },
-          createElement('h3', null, 'Chấm công vào'),
-          createElement('p', null, 'Ghi nhận thời điểm bắt đầu làm việc trong ngày.'),
-          createElement(
-            'button',
-            {
-              className: 'ritzy-btn block',
-              onClick: handleCheckIn,
-              disabled: Boolean(todayAttendance) || isChecking
-            },
-            isChecking ? 'Đang xử lý...' : 'Chấm công vào'
           )
-        ),
-        createElement(
-          'article',
-          {
-            className: `ritzy-action-card ${!todayAttendance || todayAttendance.checkOutTime ? 'disabled' : ''}`,
-            'aria-disabled': !todayAttendance || Boolean(todayAttendance?.checkOutTime)
-          },
-          createElement('h3', null, 'Chấm công ra'),
-          createElement('p', null, 'Hoàn tất phiên làm việc và tính tổng giờ.'),
-          createElement(
-            'button',
-            {
-              className: 'ritzy-btn block',
-              onClick: handleCheckOut,
-              disabled: !todayAttendance || Boolean(todayAttendance.checkOutTime) || isChecking
-            },
-            isChecking ? 'Đang xử lý...' : 'Chấm công ra'
-          )
-        ),
-        createElement(
-          'article',
-          { className: 'ritzy-action-card' },
-          createElement('h3', null, 'Lịch sử chấm công'),
-          createElement('p', null, 'Xem 10 bản ghi gần nhất của bạn.'),
-          createElement(
-            'button',
-            { className: 'ritzy-btn ghost block', onClick: toggleHistory },
-            showHistory ? 'Thu gọn lịch sử' : 'Xem lịch sử'
-          )
-        )
-      ),
-      showHistory
-        ? createElement(
-          'section',
-          { className: 'ritzy-history' },
-          createElement(
-            'header',
-            null,
-            createElement(
+          : null,
+        isLoading
+          ? createElement('p', { className: 'ritzy-placeholder' }, 'Đang tải dữ liệu...')
+          : records.length === 0
+            ? createElement('p', { className: 'ritzy-placeholder' }, 'Không có dữ liệu chấm công.')
+            : createElement(
               'div',
               null,
-              createElement('p', { className: 'ritzy-overline' }, 'Lịch sử'),
-              createElement('h2', { className: 'ritzy-panel-title' }, 'Nhật ký chấm công')
-            ),
-            createElement('span', { className: 'ritzy-calendar-chip' }, `${attendanceHistory.length} bản ghi`)
-          ),
-          isHistoryLoading
-            ? createElement('p', { className: 'ritzy-placeholder' }, 'Đang tải lịch sử...')
-            : attendanceHistory.length === 0
-              ? createElement('p', { className: 'ritzy-placeholder' }, 'Bạn chưa có lịch sử chấm công.')
-              : createElement(
+              createElement(
                 'div',
                 { className: 'ritzy-table-wrapper' },
                 createElement(
@@ -423,15 +576,199 @@ const UserDashboardPage = (): ReactElement => {
                   createElement(
                     'tbody',
                     null,
-                    attendanceHistory.map((att) => createElement(HistoryRow, { key: att.id, attendance: att }))
+                    paginatedRecords.map((att) => createElement(HistoryRow, { key: att.id, attendance: att }))
                   )
                 )
-              )
+              ),
+              records.length > HISTORY_PAGE_SIZE
+                ? createElement(
+                  'div',
+                  { className: 'ritzy-pagination' },
+                  createElement(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ritzy-btn ghost',
+                      onClick: () => handlePageChange(currentPage - 1),
+                      disabled: currentPage === 1
+                    },
+                    'Trang trước'
+                  ),
+                  createElement(
+                    'span',
+                    { className: 'ritzy-pagination-info' },
+                    `Trang ${currentPage} / ${totalPages}`
+                  ),
+                  createElement(
+                    'button',
+                    {
+                      type: 'button',
+                      className: 'ritzy-btn ghost',
+                      onClick: () => handlePageChange(currentPage + 1),
+                      disabled: currentPage === totalPages
+                    },
+                    'Trang sau'
+                  )
+                )
+                : null
+            ),
+        createElement(
+          'div',
+          { className: 'ritzy-history-summary' },
+          createElement(
+            'div',
+            { className: 'ritzy-summary-card' },
+            createElement('span', { className: 'ritzy-metric-label' }, 'Tổng giờ (theo bộ lọc)'),
+            createElement('strong', null, formatTotalHours(totalHours)),
+            createElement('p', null, 'Tính theo khoảng thời gian bạn đang lọc.')
+          ),
+          createElement(
+            'div',
+            { className: 'ritzy-summary-card' },
+            createElement('span', { className: 'ritzy-metric-label' }, 'Số phiên'),
+            createElement('strong', null, records.length),
+            createElement('p', null, 'Tổng số phiên trong bộ lọc.')
+          ),
+          createElement(
+            'div',
+            { className: 'ritzy-summary-card' },
+            createElement('span', { className: 'ritzy-metric-label' }, 'Trạng thái'),
+            createElement('strong', null, status === 'IN' ? 'Đang làm việc' : 'Ngoài ca'),
+            createElement('p', null, isViewingSelf ? 'Phiên hiện tại của bạn.' : 'Phiên hiện tại của người bạn đang xem.')
+          )
         )
-        : null
+      ),
+      createElement(
+        'section',
+        { className: 'ritzy-panel ritzy-quick-panel' },
+        createElement(
+          'div',
+          { className: 'ritzy-quick-head' },
+          createElement(
+            'div',
+            null,
+            createElement('p', { className: 'ritzy-overline' }, 'Chấm công nhanh'),
+            createElement(
+              'div',
+              { className: 'ritzy-quick-title' },
+              createElement('h2', { className: 'ritzy-panel-title' }, status === 'IN' ? 'Đang làm việc' : 'Sẵn sàng check-in'),
+              createElement(
+                'span',
+                { className: `ritzy-chip ${status === 'IN' ? 'success' : 'idle'}` },
+                status === 'IN' ? 'Đang ghi giờ' : 'Đang chờ'
+              )
+            ),
+            createElement(
+              'p',
+              { className: 'ritzy-quick-subtitle' },
+              !canCheckInOut
+                ? 'Bạn đang xem đồng nghiệp, chỉ có thể xem lịch sử và trạng thái.'
+                : status === 'IN'
+                  ? 'Nhớ check-out khi kết thúc ca để lưu giờ làm của bạn.'
+                  : 'Bấm check-in để mở phiên mới ngay lập tức.'
+            )
+          ),
+          createElement(
+            'div',
+            { className: 'ritzy-quick-actions' },
+            status === 'IN'
+              ? createElement(
+                'button',
+                { className: 'ritzy-btn danger', onClick: canCheckInOut ? handleCheckOut : undefined, disabled: isChecking || !canCheckInOut },
+                !canCheckInOut ? 'Chỉ xem' : isChecking ? 'Đang xử lý...' : 'Check-out'
+              )
+              : createElement(
+                'button',
+                { className: 'ritzy-btn', onClick: canCheckInOut ? handleCheckIn : undefined, disabled: isChecking || !canCheckInOut },
+                !canCheckInOut ? 'Chỉ xem' : isChecking ? 'Đang xử lý...' : 'Check-in'
+              ),
+            createElement(
+              'button',
+              {
+                className: 'ritzy-btn ghost',
+                type: 'button',
+                onClick: () => fetchAttendance(),
+                disabled: isLoading || isChecking
+              },
+              isLoading ? 'Đang tải...' : 'Làm mới'
+            )
+          )
+        ),
+        createElement(
+          'div',
+          { className: 'ritzy-quick-grid' },
+          createElement(
+            'div',
+            { className: 'ritzy-quick-card' },
+            createElement(
+              'div',
+              { className: 'ritzy-quick-card-top' },
+              createElement(
+                'div',
+                null,
+                createElement('p', { className: 'ritzy-overline subtle' }, 'Phiên hiện tại'),
+                createElement(
+                  'h3',
+                  { className: 'ritzy-quick-card-title', suppressHydrationWarning: true },
+                  sessionTimerText
+                )
+              ),
+              createElement(
+                'div',
+                { className: 'ritzy-quick-live' },
+                createElement('span', { className: `ritzy-live-dot ${status === 'IN' ? 'active' : 'idle'}` }),
+                createElement('span', null, status === 'IN' ? 'Đang ghi giờ' : 'Đang chờ')
+              )
+            ),
+            createElement(
+              'p',
+              { className: 'ritzy-quick-lead' },
+              !canCheckInOut
+                ? 'Đang xem chấm công của đồng nghiệp ở cùng cấp. Bạn chỉ xem được dữ liệu.'
+                : status === 'IN'
+                  ? 'Nhấn Check-out để chốt giờ ngay khi kết thúc ca.'
+                  : 'Bạn chưa check-in. Bắt đầu phiên làm việc để ghi nhận thời gian.'
+            ),
+            null
+          ),
+          createElement(
+            'div',
+            { className: 'ritzy-quick-metrics' },
+            createElement(
+              'div',
+              { className: 'ritzy-metric-card' },
+              createElement('span', { className: 'ritzy-metric-label' }, 'Phiên hiện tại'),
+              createElement(
+                'strong',
+                { suppressHydrationWarning: true },
+                activeRecord ? formatDateTime(activeRecord.checkInTime) : 'Không có'
+              ),
+              createElement('p', null, status === 'IN' ? 'Đang hoạt động' : 'Chưa check-in')
+            ),
+            createElement(
+              'div',
+              { className: 'ritzy-metric-card' },
+              createElement('span', { className: 'ritzy-metric-label' }, 'Phiên gần nhất'),
+              createElement(
+                'strong',
+                { suppressHydrationWarning: true },
+                lastRecord ? formatDate(new Date(lastRecord.workDate)) : 'Chưa có dữ liệu'
+              ),
+              createElement(
+                'p',
+                { suppressHydrationWarning: true },
+                lastRecord?.checkOutTime
+                  ? `Check-out: ${formatDateTime(lastRecord.checkOutTime)}`
+                  : lastRecord
+                    ? 'Chưa check-out'
+                    : 'Chưa ghi nhận ca làm việc'
+              )
+            )
+          )
+        )
+      )
     )
   )
 }
 
 export default UserDashboardPage
-
