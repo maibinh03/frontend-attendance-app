@@ -1,5 +1,6 @@
-import { createElement, type ReactNode, type ReactElement } from 'react'
+import type { ReactNode } from 'react'
 import type { Metadata } from 'next'
+import { ThemeProviderWrapper } from '@/components/ThemeProviderWrapper'
 import './globals.css'
 import './styles/base.css'
 import './styles/auth.css'
@@ -16,11 +17,15 @@ export default function RootLayout({
   children
 }: Readonly<{
   children: ReactNode
-}>): ReactElement {
-  return createElement(
-    'html',
-    { lang: 'vi' },
-    createElement('body', null, children)
+}>) {
+  return (
+    <html lang= "vi" >
+    <body>
+    <ThemeProviderWrapper>
+    { children }
+    </ThemeProviderWrapper>
+    </body>
+    </html>
   )
 }
 

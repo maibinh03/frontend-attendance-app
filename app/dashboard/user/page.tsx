@@ -17,6 +17,7 @@ import { apiClient } from '@/lib/api'
 import { formatDate, formatDateDetailed, formatDateTime, formatTimeOnly, formatTotalHours, formatTotalHoursAsDateTime } from '@/lib/utils/format'
 import { MESSAGE_TIMEOUT } from '@/lib/constants'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import '@/app/styles/user-dashboard.css'
 
 export const dynamic = 'force-dynamic'
@@ -654,7 +655,9 @@ const UserDashboardPage = (): ReactElement => {
       <header className="apple-topbar">
         <div className="topbar-blur" />
         <div className="topbar-content">
-          <div className="topbar-left" />
+          <div className="topbar-left">
+            <ThemeToggle />
+          </div>
           <div className="topbar-center">
             <span className="topbar-title">Chấm công · {isViewingSelf ? 'Bạn' : selectedUserDisplay}</span>
             {isViewingSelf ? <span className="topbar-underline" /> : null}
