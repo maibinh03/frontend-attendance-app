@@ -158,6 +158,202 @@ const ClockHands = memo<{ status: 'IN' | 'OUT'; elapsedSeconds: number }>(({ sta
 })
 ClockHands.displayName = 'ClockHands'
 
+type SlimeOverlayProps = {
+  clockRef: React.RefObject<HTMLDivElement | null>
+  checkButtonRef: React.RefObject<HTMLButtonElement | null>
+}
+
+const CatOverlay = memo<SlimeOverlayProps>(({ clockRef }) => {
+  const catRef = useRef<HTMLDivElement | null>(null)
+  const posRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const velRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const tiltRef = useRef<number>(0)
+  const hoverRef = useRef<{ x: number; y: number } | null>(null)
+  const dragRef = useRef<{ active: boolean; id: number | null }>({ active: false, id: null })
+  const rafRef = useRef<number | null>(null)
+  const returnRef = useRef<{ active: boolean; start: number; from: { x: number; y: number } }>({ active: false, start: 0, from: { x: 0, y: 0 } })
+
+  useEffect(() => {
+    const clockEl = clockRef.current
+    const catEl = catRef.current
+    if (!clockEl || !catEl) return
+
+    let width = clockEl.clientWidth
+    let height = clockEl.clientHeight
+    const catSize = 60
+    let last = performance.now()
+    let home = { x: width / 2, y: height / 2 + Math.min(width, height) / 2 - catSize / 2 - 4 }
+
+    const resize = () => {
+      width = clockEl.clientWidth
+      height = clockEl.clientHeight
+      home = { x: width / 2, y: height / 2 + Math.min(width, height) / 2 - catSize / 2 - 4 }
+      posRef.current = home
+    }
+
+    const clampTilt = (t: number) => Math.max(-0.17, Math.min(0.17, t)) // ~±10°
+
+    const onPointerMove = (e: PointerEvent) => {
+      const rect = clockEl.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      hoverRef.current = { x, y }
+      if (dragRef.current.active && dragRef.current.id === e.pointerId) {
+        posRef.current = { x, y }
+        returnRef.current = { active: false, start: 0, from: posRef.current }
+      }
+    }
+
+    const onPointerDown = (e: PointerEvent) => {
+      const rect = clockEl.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const dist = Math.hypot(x - posRef.current.x, y - posRef.current.y)
+      if (dist <= catSize) {
+        dragRef.current = { active: true, id: e.pointerId }
+        posRef.current = { x, y }
+        returnRef.current = { active: false, start: 0, from: posRef.current }
+      }
+    }
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (dragRef.current.id === e.pointerId) {
+        dragRef.current = { active: false, id: null }
+        returnRef.current = { active: true, start: performance.now(), from: posRef.current }
+      }
+    }
+
+    const onLeave = () => {
+      hoverRef.current = null
+      if (dragRef.current.active) {
+        dragRef.current = { active: false, id: null }
+        returnRef.current = { active: true, start: performance.now(), from: posRef.current }
+      }
+    }
+
+    clockEl.addEventListener('pointermove', onPointerMove)
+    clockEl.addEventListener('pointerleave', onLeave)
+    clockEl.addEventListener('pointerdown', onPointerDown)
+    clockEl.addEventListener('pointerup', onPointerUp)
+
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+    const clockDegToRad = (deg: number) => ((deg - 90) * Math.PI) / 180
+
+    const tick = (now: number) => {
+      const dt = Math.min(32, now - last)
+      last = now
+
+      // Home follow along bottom arc 5h-8h (slow drift)
+      const arcStart = clockDegToRad(150) // 5h
+      const arcEnd = clockDegToRad(240) // 8h
+      const arcMid = (arcStart + arcEnd) / 2
+      const arcSpan = (arcEnd - arcStart) / 2
+      const angle = arcMid + Math.sin(now * 0.001) * arcSpan * 0.35
+      const radius = Math.min(width, height) / 2 - catSize / 2 - 4
+      home = { x: width / 2 + Math.cos(angle) * radius, y: height / 2 + Math.sin(angle) * radius }
+
+      let target = home
+
+      // Hover tilt only
+      let tiltTarget = 0
+      if (hoverRef.current) {
+        const dx = hoverRef.current.x - home.x
+        const dy = hoverRef.current.y - home.y
+        const ang = Math.atan2(dy, dx)
+        const diff = Math.atan2(Math.sin(ang - Math.PI / 2), Math.cos(ang - Math.PI / 2))
+        tiltTarget = clampTilt(diff * 0.5)
+      }
+
+      // Drag positioning (clamp to small radius from home)
+      if (dragRef.current.active && hoverRef.current) {
+        const dx = hoverRef.current.x - home.x
+        const dy = hoverRef.current.y - home.y
+        const dist = Math.min(60, Math.hypot(dx, dy))
+        const dir = Math.atan2(dy, dx)
+        target = { x: home.x + Math.cos(dir) * dist, y: home.y + Math.sin(dir) * dist }
+      }
+
+      // Return animation after drag
+      if (returnRef.current.active) {
+        const t = Math.min(1, (now - returnRef.current.start) / 500)
+        const p = easeOutCubic(t)
+        target = {
+          x: returnRef.current.from.x + (home.x - returnRef.current.from.x) * p,
+          y: returnRef.current.from.y + (home.y - returnRef.current.from.y) * p
+        }
+        if (t >= 1) {
+          returnRef.current.active = false
+        }
+      }
+
+      // Overdamped spring to target on position
+      const k = 0.12
+      const c = 0.9
+      const pos = posRef.current
+      velRef.current.x += (target.x - pos.x) * k
+      velRef.current.y += (target.y - pos.y) * k
+      velRef.current.x *= c
+      velRef.current.y *= c
+      posRef.current = { x: pos.x + velRef.current.x * (dt / 16.6), y: pos.y + velRef.current.y * (dt / 16.6) }
+
+      // Clamp to rim (6h line)
+      const dxHome = posRef.current.x - width / 2
+      const dyHome = posRef.current.y - height / 2
+      const distHome = Math.hypot(dxHome, dyHome) || 1
+      const clampedX = width / 2 + (dxHome / distHome) * radius
+      const clampedY = height / 2 + (dyHome / distHome) * radius
+      posRef.current = { x: clampedX, y: clampedY }
+
+      // Tilt ease
+      tiltRef.current += (tiltTarget - tiltRef.current) * 0.15
+
+      const baseAngle = clockDegToRad(180) // 6h
+      const drawAngle = baseAngle + tiltRef.current
+      catEl.style.transform = `translate(${posRef.current.x - catSize / 2}px, ${posRef.current.y - catSize / 2}px) rotate(${drawAngle}rad)`
+
+      rafRef.current = requestAnimationFrame(tick)
+    }
+
+    resize()
+    const resizeObserver = new ResizeObserver(resize)
+    resizeObserver.observe(clockEl)
+    rafRef.current = requestAnimationFrame(tick)
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current)
+      resizeObserver.disconnect()
+      clockEl.removeEventListener('pointermove', onPointerMove)
+      clockEl.removeEventListener('pointerleave', onLeave)
+      clockEl.removeEventListener('pointerdown', onPointerDown)
+      clockEl.removeEventListener('pointerup', onPointerUp)
+    }
+  }, [clockRef])
+
+  return (
+    <div className="cat-overlay" aria-hidden>
+      <div ref={catRef} className="cat-simple">
+        <div className="cat-ears">
+          <div className="cat-ear left" />
+          <div className="cat-ear right" />
+        </div>
+        <div className="cat-head">
+          <div className="cat-eye left" />
+          <div className="cat-eye right" />
+          <div className="cat-nose" />
+        </div>
+        <div className="cat-body">
+          <div className="cat-tail" />
+          <div className="cat-paws">
+            <div className="cat-paw left" />
+            <div className="cat-paw right" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+})
+CatOverlay.displayName = 'CatOverlay'
+
 const BadgePill = ({ className = '', children }: { className?: string; children: ReactNode }) => (
   <span className={`history-badge ${className}`.trim()}>{children}</span>
 )
@@ -204,6 +400,8 @@ const UserDashboardPage = (): ReactElement => {
   const [nudgeTop, setNudgeTop] = useState(0)
   const [clockAnimation, setClockAnimation] = useState<'checkin' | 'checkout' | null>(null)
   const sidebarCloseTimeoutRef = useRef<number | null>(null)
+  const clockFaceRef = useRef<HTMLDivElement | null>(null)
+  const checkButtonRef = useRef<HTMLButtonElement | null>(null)
   const [dateInfo, setDateInfo] = useState<{ weekday: string; day: string; month: string; year: string }>({
     weekday: '',
     day: '',
@@ -836,7 +1034,8 @@ const UserDashboardPage = (): ReactElement => {
         <main className="apple-main">
           <section className="hero-section">
             <div className="clock-container">
-              <div className={`clock-face ${clockAnimation ? `clock-animate-${clockAnimation}` : ''}`}>
+              <div className={`clock-face ${clockAnimation ? `clock-animate-${clockAnimation}` : ''}`} ref={clockFaceRef}>
+                <CatOverlay clockRef={clockFaceRef} checkButtonRef={checkButtonRef} />
                 {/* Clock numbers */}
                 {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((num) => (
                   <div key={num} className={`clock-number clock-number-${num}`}>
@@ -850,6 +1049,7 @@ const UserDashboardPage = (): ReactElement => {
                 {/* Check-in/Checkout button positioned like stopwatch button */}
                 <button
                   className={`clock-check-button ${status === 'IN' ? 'checkout' : 'checkin'}`}
+                  ref={checkButtonRef}
                   onClick={status === 'IN' ? (canCheckInOut ? handleCheckOut : undefined) : (canCheckInOut ? handleCheckIn : undefined)}
                   disabled={isChecking || !canCheckInOut}
                   aria-label={status === 'IN' ? 'Check-out' : 'Check-in'}
