@@ -175,6 +175,7 @@ const UserDashboardPage = (): ReactElement => {
   const [isChecking, setIsChecking] = useState(false)
   const [isLoadingPeers, setIsLoadingPeers] = useState(false)
   const [showUserPicker, setShowUserPicker] = useState(false)
+  const [isDatePickerQuickOpen, setIsDatePickerQuickOpen] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [isSidebarHovered, setIsSidebarHovered] = useState(false)
   const [showFilterNudge, setShowFilterNudge] = useState(false)
@@ -358,6 +359,9 @@ const UserDashboardPage = (): ReactElement => {
   useEffect(() => {
     if (!showUserPicker) return
 
+    // Đóng DatePicker dropdown khi mở user picker
+    setIsDatePickerQuickOpen(false)
+
     const handleClickOutside = (event: MouseEvent) => {
       if (!userPickerRef.current) return
       if (event.target instanceof Node && !userPickerRef.current.contains(event.target)) {
@@ -370,6 +374,13 @@ const UserDashboardPage = (): ReactElement => {
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [showUserPicker])
+
+  useEffect(() => {
+    if (!isDatePickerQuickOpen) return
+
+    // Đóng user picker khi mở DatePicker dropdown
+    setShowUserPicker(false)
+  }, [isDatePickerQuickOpen])
 
   useEffect(() => {
     if (status !== 'IN' || !activeRecord?.checkInTime) {
@@ -741,6 +752,8 @@ const UserDashboardPage = (): ReactElement => {
                   value={filterRangeValue}
                   onChange={handleDatePickerChange}
                   showQuickFilters
+                  quickOpen={isDatePickerQuickOpen}
+                  onQuickOpenChange={setIsDatePickerQuickOpen}
                   ariaLabel="Chọn khoảng ngày"
                 />
                 <div className="filter-compact-buttons">

@@ -42,6 +42,8 @@ interface DatePickerProps {
     showQuickFilters?: boolean
     className?: string
     ariaLabel?: string
+    quickOpen?: boolean
+    onQuickOpenChange?: (open: boolean) => void
 }
 
 type QuickFilterOption = {
@@ -143,7 +145,9 @@ const DatePicker = ({
     onChange,
     showQuickFilters = false,
     className,
-    ariaLabel = 'Date picker'
+    ariaLabel = 'Date picker',
+    quickOpen: controlledQuickOpen,
+    onQuickOpenChange
 }: DatePickerProps): ReactElement => {
     const normalized = useMemo(
         () => normalizeValue(value ?? defaultValue ?? null, mode),
@@ -154,7 +158,14 @@ const DatePicker = ({
     const [currentMonth, setCurrentMonth] = useState<Date>(startOfMonth(normalized.focusDate))
     const [focusedDate, setFocusedDate] = useState<Date>(normalized.focusDate)
     const [hoveredDate, setHoveredDate] = useState<Date | null>(null)
-    const [quickOpen, setQuickOpen] = useState(false)
+    const [internalQuickOpen, setInternalQuickOpen] = useState(false)
+    const quickOpen = controlledQuickOpen !== undefined ? controlledQuickOpen : internalQuickOpen
+    const setQuickOpen = (open: boolean) => {
+        if (controlledQuickOpen === undefined) {
+            setInternalQuickOpen(open)
+        }
+        onQuickOpenChange?.(open)
+    }
     const [activePreset, setActivePreset] = useState<QuickFilterKey | null>(null)
     const [dragStart, setDragStart] = useState<Date | null>(null)
     const [dragEnd, setDragEnd] = useState<Date | null>(null)
@@ -377,7 +388,7 @@ const DatePicker = ({
                 <div className="relative" ref={dropdownRef}>
                     <button
                         type="button"
-                        onClick={() => setQuickOpen((prev) => !prev)}
+                        onClick={() => setQuickOpen(!quickOpen)}
                         className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-sm transition hover:border-blue-300 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500"
                         aria-haspopup="menu"
                         aria-expanded={quickOpen}
@@ -387,8 +398,9 @@ const DatePicker = ({
                     </button>
                     {quickOpen ? (
                         <div
-                            className="absolute right-0 z-20 mt-3 w-full min-w-[240px] max-w-xs rounded-2xl border border-slate-200 bg-white p-3 shadow-xl ring-1 ring-slate-100"
+                            className="absolute right-0 z-10 mt-3 w-full min-w-[240px] max-w-xs rounded-2xl border border-slate-200 bg-white p-3 shadow-xl ring-1 ring-slate-100"
                             role="menu"
+                            style={{ zIndex: 10 }}
                         >
                             <div className="divide-y divide-slate-100">
                                 {quickFilters.map((option) => (
