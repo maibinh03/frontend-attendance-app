@@ -48,8 +48,8 @@
   backdrop-filter: blur(18px);
   background: rgba(255, 255, 255, 0.75);
   border-bottom: 1px solid var(--apple-border);
-  z-index: 30;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  z-index: 9999;
 }
 
 .topbar-blur {
@@ -57,7 +57,7 @@
   inset: 0;
   backdrop-filter: blur(18px);
   border-radius: inherit;
-  z-index: 0;
+  /* z-index: 0; */
   pointer-events: none;
 }
 
@@ -71,7 +71,12 @@
   gap: var(--spacing-16);
   padding: 0 var(--spacing-24);
   position: relative;
-  z-index: 1;
+  /* z-index: 9999; */
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
 }
 
 .topbar-center {
@@ -141,90 +146,524 @@
   color: var(--apple-error);
 }
 
-.hero-grid {
-  display: grid;
-  grid-template-columns: 1.3fr 0.7fr;
-  gap: var(--spacing-20, 20px);
+.hero-section {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--spacing-40) 0;
 }
 
-.hero-card,
+.clock-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-24);
+  position: relative;
+  z-index: 1;
+}
+
+.clock-face {
+  position: relative;
+  width: 400px;
+  height: 400px;
+  border-radius: 50%;
+  background: var(--apple-surface);
+  border: 8px solid var(--apple-border);
+  box-shadow: var(--shadow-1), inset 0 0 20px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.3s ease;
+  z-index: 1;
+  transform-style: preserve-3d;
+}
+
+.clock-animate-checkin {
+  animation: clockCheckinPulse 1s ease-in-out, clockShake 1s ease-in-out;
+  animation-fill-mode: forwards;
+}
+
+.clock-animate-checkout {
+  animation: clockCheckoutPulse 1s ease-in-out, clockShake 1s ease-in-out;
+  animation-fill-mode: forwards;
+}
+
+@keyframes clockCheckinPulse {
+  0% {
+    border-color: var(--apple-border);
+  }
+
+  50% {
+    border-color: var(--apple-success);
+    box-shadow: var(--shadow-1), inset 0 0 20px rgba(0, 0, 0, 0.05), 0 0 30px rgba(52, 199, 89, 0.4);
+  }
+
+  100% {
+    border-color: var(--apple-border);
+  }
+}
+
+@keyframes clockCheckoutPulse {
+  0% {
+    border-color: var(--apple-border);
+  }
+
+  50% {
+    border-color: var(--apple-error);
+    box-shadow: var(--shadow-1), inset 0 0 20px rgba(0, 0, 0, 0.05), 0 0 30px rgba(255, 59, 48, 0.4);
+  }
+
+  100% {
+    border-color: var(--apple-border);
+  }
+}
+
+@keyframes clockShake {
+
+  0%,
+  100% {
+    transform: translateX(0) translateY(0);
+  }
+
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-3px) translateY(-2px);
+  }
+
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(3px) translateY(2px);
+  }
+}
+
+.clock-number {
+  position: absolute;
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--apple-text);
+  transform-origin: center;
+  font-family: 'SF Pro Display', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  letter-spacing: 0.5px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  top: 50%;
+  left: 50%;
+}
+
+.clock-number-12 {
+  transform: translate(-50%, calc(-50% - 160px));
+}
+
+.clock-number-1 {
+  transform: translate(calc(-50% + 80px), calc(-50% - 140px));
+}
+
+.clock-number-2 {
+  transform: translate(calc(-50% + 140px), calc(-50% - 80px));
+}
+
+.clock-number-3 {
+  transform: translate(calc(-50% + 160px), -50%);
+}
+
+.clock-number-4 {
+  transform: translate(calc(-50% + 140px), calc(-50% + 80px));
+}
+
+.clock-number-5 {
+  transform: translate(calc(-50% + 80px), calc(-50% + 140px));
+}
+
+.clock-number-6 {
+  transform: translate(-50%, calc(-50% + 160px));
+}
+
+.clock-number-7 {
+  transform: translate(calc(-50% - 80px), calc(-50% + 140px));
+}
+
+.clock-number-8 {
+  transform: translate(calc(-50% - 140px), calc(-50% + 80px));
+}
+
+.clock-number-9 {
+  transform: translate(calc(-50% - 160px), -50%);
+}
+
+.clock-number-10 {
+  transform: translate(calc(-50% - 140px), calc(-50% - 80px));
+}
+
+.clock-number-11 {
+  transform: translate(calc(-50% - 80px), calc(-50% - 140px));
+}
+
+.clock-hand {
+  position: absolute;
+  transform-origin: bottom center;
+  background: var(--apple-text);
+  border-radius: 4px 4px 0 0;
+  left: 50%;
+  bottom: 50%;
+  transform: translateX(-50%);
+}
+
+.clock-hand-hour {
+  width: 6px;
+  height: 100px;
+  margin-left: -3px;
+  background: var(--apple-text);
+}
+
+.clock-hand-minute {
+  width: 4px;
+  height: 140px;
+  margin-left: -2px;
+  background: var(--apple-text);
+}
+
+.clock-hand-second {
+  width: 2px;
+  height: 160px;
+  margin-left: -1px;
+  background: var(--apple-error);
+}
+
+.clock-center {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--apple-text);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* z-index: 10; */
+  box-shadow: 0 0 0 4px var(--apple-surface);
+}
+
+.clock-check-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-45deg) translateY(-230px);
+  transform-origin: center center;
+  padding: 14px 32px;
+  font-weight: 600;
+  font-size: 16px;
+  border: 2px solid var(--apple-border);
+  cursor: pointer;
+  transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    background-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 200ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-soft);
+  white-space: nowrap;
+  border-radius: var(--radius-md);
+  min-width: 160px;
+  z-index: 1;
+  pointer-events: auto;
+  display: block;
+  visibility: visible;
+  opacity: 1;
+  /* Premium hover effect setup - overflow visible for glow effect */
+  overflow: visible;
+  isolation: isolate;
+}
+
+/* Pulse glow effect - YouTube Subscribe style */
+.clock-check-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-md);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  /* Reset animation khi không hover */
+  animation: none;
+}
+
+/* Pulse animation for glow ring - YouTube Subscribe style
+ * Fade sau 1 giây
+ * 
+ * 🎛️ ADJUSTMENT GUIDE:
+ * - Speed: Change animation duration (1600ms) in hover ::before rule
+ *   - Faster: 1200ms
+ *   - Slower: 2000ms
+ * 
+ * - Glow intensity: Adjust opacity values (0.8 → 0)
+ *   - Brighter: 0.9 → 0.1
+ *   - Subtler: 0.6 → 0
+ * 
+ * - Glow size: Change scale(1.15) in 100% keyframe
+ *   - Larger: 1.2 (more expansive)
+ *   - Smaller: 1.1 (tighter)
+ * 
+ * - Fade timing: Change 60% keyframe (0.6 = 60% của animation = ~1 giây)
+ *   - Earlier fade: 50% (0.5)
+ *   - Later fade: 70% (0.7)
+ * 
+ * - No bounce: Uses cubic-bezier(0.4, 0, 0.2, 1) - Material Design easing
+ */
+@keyframes pulseGlow {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.8;
+  }
+
+  60% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(1.15);
+    opacity: 0;
+  }
+}
+
+.clock-check-button.checkin {
+  background: var(--apple-success);
+  color: #fff;
+}
+
+/* Premium hover effect - YouTube Subscribe style
+ * Hiệu ứng CHỈ xuất hiện khi hover vào mặt đồng hồ (clock-face)
+ * 
+ * 🎛️ ADJUSTMENT GUIDE:
+ * - Scale amount: Change scale(1.02)
+ *   - More noticeable: 1.03-1.04
+ *   - Subtler: 1.01
+ * 
+ * - Brightness/Saturation: Change filter values
+ *   - More vibrant: brightness(1.04) saturate(1.04)
+ *   - Subtler: brightness(1.02) saturate(1.02)
+ */
+.clock-face:hover .clock-check-button.checkin:not(:disabled),
+.clock-check-button.checkin:focus-visible:not(:disabled) {
+  /* Scale effect - smooth, no bounce */
+  transform: translate(-50%, -50%) rotate(-45deg) translateY(-230px) scale(1.02);
+
+  /* Brightness + Saturation increase (2-4%) */
+  filter: brightness(1.03) saturate(1.03);
+
+  /* Background color slightly brighter */
+  background: #2dd55b;
+
+  /* Border đổi sang màu vàng nhạt khi hover */
+  border-color: rgba(255, 235, 59, 0.6);
+
+  /* Enhanced shadow */
+  box-shadow: 0 8px 24px rgba(52, 199, 89, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Pulse glow ring on hover - CHỈ khi hover vào mặt đồng hồ
+ * Fade sau 1 giây (1600ms animation với fade ở 60% = ~1 giây)
+ * 
+ * 🎛️ ADJUSTMENT GUIDE:
+ * - Animation speed: Change 1600ms (faster: 1200ms, slower: 2000ms)
+ * - Fade timing: Change 60% trong keyframes (0.6 = ~1 giây với 1600ms)
+ * - Glow spread: Change calc(100% + 12px) - larger number = bigger glow
+ * - Glow color intensity: Change rgba alpha (0.4) - higher = brighter
+ * - Glow fade distance: Change gradient stop (70%) - lower = tighter glow
+ */
+.clock-face:hover .clock-check-button.checkin:not(:disabled)::before,
+.clock-check-button.checkin:focus-visible:not(:disabled)::before {
+  opacity: 1;
+  animation: pulseGlow 1600ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  background: radial-gradient(circle, rgba(52, 199, 89, 0.4) 0%, rgba(52, 199, 89, 0) 70%);
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
+}
+
+.clock-check-button.checkout {
+  background: var(--apple-error);
+  color: #fff;
+}
+
+/* Premium hover effect - YouTube Subscribe style
+ * Hiệu ứng CHỈ xuất hiện khi hover vào mặt đồng hồ (clock-face)
+ * (Same adjustment guide as checkin above)
+ */
+.clock-face:hover .clock-check-button.checkout:not(:disabled),
+.clock-check-button.checkout:focus-visible:not(:disabled) {
+  /* Scale effect - smooth, no bounce */
+  transform: translate(-50%, -50%) rotate(-45deg) translateY(-230px) scale(1.02);
+
+  /* Brightness + Saturation increase (2-4%) */
+  filter: brightness(1.03) saturate(1.03);
+
+  /* Background color slightly brighter */
+  background: #ff4d45;
+
+  /* Border đổi sang màu vàng nhạt khi hover */
+  border-color: rgba(255, 235, 59, 0.6);
+
+  /* Enhanced shadow */
+  box-shadow: 0 8px 24px rgba(255, 59, 48, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Pulse glow ring on hover - CHỈ khi hover vào mặt đồng hồ
+ * Fade sau 1 giây (1600ms animation với fade ở 60% = ~1 giây)
+ * (Same adjustment guide as checkin above)
+ */
+.clock-face:hover .clock-check-button.checkout:not(:disabled)::before,
+.clock-check-button.checkout:focus-visible:not(:disabled)::before {
+  opacity: 1;
+  animation: pulseGlow 1600ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  background: radial-gradient(circle, rgba(255, 59, 48, 0.4) 0%, rgba(255, 59, 48, 0) 70%);
+  width: calc(100% + 12px);
+  height: calc(100% + 12px);
+}
+
+.clock-check-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Hiệu ứng premium chỉ xuất hiện khi hover vào mặt đồng hồ */
+
+.clock-date-box {
+  padding: 16px 24px;
+  background: var(--apple-surface);
+  border: 1px solid var(--apple-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-weekday {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--apple-accent);
+  text-transform: capitalize;
+}
+
+.date-details {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 15px;
+  color: var(--apple-text);
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-day {
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--apple-text);
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+
+.date-month {
+  font-weight: 500;
+  text-transform: capitalize;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  letter-spacing: 0.5px;
+}
+
+.date-year {
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5px;
+}
+
+.date-separator {
+  color: var(--apple-sub);
+  font-weight: 400;
+}
+
+/* Sidebar trigger - mở rộng để dễ hover hơn */
+.sidebar-trigger {
+  position: fixed;
+  top: 72px;
+  right: 0;
+  width: 60px;
+  height: calc(100vh - 72px);
+  /* z-index: 39; */
+  cursor: pointer;
+  z-index: 100;
+}
+
+/* Sidebar styles */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  /* z-index: 40; */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--transition), visibility var(--transition);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
+}
+
+.sidebar-overlay.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.sidebar {
+  position: fixed;
+  top: 72px;
+  right: 0;
+  width: 360px;
+  height: calc(100vh - 72px);
+  background: var(--apple-surface);
+  border-left: 1px solid var(--apple-border);
+  box-shadow: var(--shadow-1);
+  /* z-index: 41; */
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+  z-index: 101;
+}
+
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-content {
+  padding: var(--spacing-24);
+  height: 100%;
+  overflow-y: auto;
+}
+
 .user-card,
 .history-block,
-.filter-panel,
 .summary-card {
   background: var(--apple-surface);
   border: 1px solid var(--apple-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-1);
-}
-
-.hero-card {
-  padding: var(--spacing-24);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-16);
-}
-
-.hero-top {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-16);
-}
-
-.hero-heading {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.status-row {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-12);
-}
-
-.status-badge {
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  background: var(--apple-muted);
-  color: var(--apple-text);
-}
-
-.status-badge.active {
-  background: rgba(0, 122, 255, 0.12);
-  color: var(--apple-accent);
-}
-
-.status-badge.idle {
-  background: rgba(91, 93, 103, 0.08);
-  color: var(--apple-sub);
-}
-
-.pill {
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  border: 1px solid var(--apple-border);
-  background: rgba(255, 255, 255, 0.8);
-  color: var(--apple-sub);
-}
-
-.pill.subtle {
-  background: rgba(91, 93, 103, 0.08);
-}
-
-.pill.muted {
-  background: var(--apple-muted);
-  color: var(--apple-text);
-}
-
-.hero-heading h1 {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 4px 0;
-  color: var(--apple-text);
 }
 
 .eyebrow {
@@ -240,108 +679,15 @@
   color: var(--apple-sub);
 }
 
-.timer-block {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: var(--spacing-16);
-  padding: 18px;
-  border-radius: var(--radius-md);
-  background: linear-gradient(145deg, rgba(0, 122, 255, 0.06), rgba(0, 122, 255, 0.02));
-  border: 1px solid rgba(0, 122, 255, 0.15);
-}
-
-.timer-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.live-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.live-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--apple-sub);
-  box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.3);
-  animation: pulse 1.8s infinite;
-}
-
-.live-dot.active {
-  background: var(--apple-accent);
-  box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.3);
-}
-
-.live-dot.idle {
-  animation: none;
-}
-
-@keyframes pulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 122, 255, 0.28);
-  }
-
-  70% {
-    box-shadow: 0 0 0 10px rgba(0, 122, 255, 0);
-  }
-
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 122, 255, 0);
-  }
-}
-
-.timer-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: var(--apple-text);
-}
-
-.session-meta {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--spacing-16);
-}
-
-.meta-col {
-  padding: 12px;
-  border-radius: var(--radius-md);
-  background: var(--apple-muted);
-  border: 1px solid var(--apple-border);
-}
-
-.meta-col .label {
-  font-size: 13px;
-  color: var(--apple-sub);
-  margin-bottom: 4px;
-}
-
 .label {
   font-size: 13px;
   color: var(--apple-sub);
-}
-
-.meta-col strong {
-  display: block;
-  font-size: 16px;
-  color: var(--apple-text);
 }
 
 .note {
   font-size: 13px;
   color: var(--apple-sub);
   margin-top: 4px;
-}
-
-.hero-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-12);
-  flex-wrap: wrap;
 }
 
 .btn {
@@ -461,7 +807,7 @@
   padding: 8px;
   display: grid;
   gap: 6px;
-  z-index: 12;
+  /* z-index: 12; */
   max-height: 260px;
   overflow: auto;
 }
@@ -493,33 +839,6 @@
   color: var(--apple-text);
 }
 
-.filter-compact-dates {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--spacing-16);
-  align-items: center;
-}
-
-.filter-compact-dates label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-weight: 600;
-  color: var(--apple-text);
-}
-
-.filter-compact-dates input {
-  padding: 12px 14px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--apple-border);
-  background: #fff;
-}
-
-.filter-compact-actions {
-  display: grid;
-  gap: 12px;
-}
-
 .filter-compact-buttons {
   display: flex;
   gap: 10px;
@@ -539,38 +858,6 @@
   }
 }
 
-.quick-chips.tight {
-  gap: 6px;
-}
-
-.quick-chips.tight .chip {
-  padding: 8px 12px;
-}
-
-.preset-list {
-  display: grid;
-  gap: 8px;
-  padding: 4px 0 2px;
-}
-
-.preset-btn {
-  width: 100%;
-  text-align: left;
-  border: 1px solid var(--apple-border);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  background: #fff;
-  cursor: pointer;
-  transition: background var(--transition), border var(--transition), color var(--transition);
-  font-weight: 600;
-  color: var(--apple-text);
-}
-
-.preset-btn:hover {
-  border-color: rgba(0, 122, 255, 0.3);
-  background: rgba(0, 122, 255, 0.05);
-}
-
 .user-menu-item {
   border: none;
   background: transparent;
@@ -588,87 +875,6 @@
 .user-menu-item.active {
   background: rgba(0, 122, 255, 0.12);
   color: var(--apple-accent);
-}
-
-.filter-toolbar {
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid var(--apple-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-soft);
-  padding: var(--spacing-16);
-  display: block;
-}
-
-.filter-inline {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: var(--spacing-16);
-  align-items: center;
-}
-
-.filter-dates {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: var(--spacing-12);
-  align-items: center;
-}
-
-.filter-dates label {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-weight: 600;
-  color: var(--apple-text);
-}
-
-.filter-dates input {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--apple-border);
-  background: var(--apple-muted);
-}
-
-.range-chip {
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--apple-muted);
-  color: var(--apple-text);
-  border: 1px solid var(--apple-border);
-  width: fit-content;
-}
-
-.range-chip.small {
-  font-size: 13px;
-}
-
-.quick-chips {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.chip {
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--apple-border);
-  background: #fff;
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 13px;
-  transition: background var(--transition), border var(--transition);
-}
-
-.chip:hover {
-  border-color: rgba(0, 122, 255, 0.3);
-  background: rgba(0, 122, 255, 0.05);
-}
-
-.filter-actions {
-  display: flex;
-  gap: var(--spacing-12);
-  align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .history-block {
@@ -789,6 +995,69 @@
   color: var(--apple-text);
 }
 
+.filter-nudge {
+  position: fixed;
+  right: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 14px;
+  color: #444;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(6px);
+  /* z-index: 999; */
+  animation: nudgeBounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55), nudgeBounce 2s ease-in-out 0.6s infinite;
+  pointer-events: none;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%, 8px 50%);
+  border: 1px solid var(--apple-border);
+}
+
+@keyframes nudgeBounceIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-50%) translateX(30px) scale(0.7);
+  }
+
+  50% {
+    transform: translateY(-50%) translateX(-8px) scale(1.1);
+  }
+
+  70% {
+    transform: translateY(-50%) translateX(4px) scale(0.95);
+  }
+
+  85% {
+    transform: translateY(-50%) translateX(-2px) scale(1.02);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(-50%) translateX(0) scale(1);
+  }
+}
+
+@keyframes nudgeBounce {
+
+  0%,
+  100% {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  25% {
+    transform: translateY(-50%) translateX(-8px);
+  }
+
+  50% {
+    transform: translateY(-50%) translateX(0);
+  }
+
+  75% {
+    transform: translateY(-50%) translateX(-4px);
+  }
+}
+
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -809,33 +1078,195 @@
 }
 
 @media (max-width: 900px) {
-  .hero-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .filter-toolbar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
   .apple-shell {
     padding: 100px var(--spacing-16) var(--spacing-32);
+  }
+
+  .clock-face {
+    width: 320px;
+    height: 320px;
+  }
+
+  .clock-hand-hour {
+    height: 80px;
+  }
+
+  .clock-hand-minute {
+    height: 110px;
+  }
+
+  .clock-hand-second {
+    height: 130px;
+  }
+
+  .clock-number {
+    font-size: 16px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .clock-number-12 {
+    transform: translate(-50%, calc(-50% - 128px));
+  }
+
+  .clock-number-1 {
+    transform: translate(calc(-50% + 64px), calc(-50% - 112px));
+  }
+
+  .clock-number-2 {
+    transform: translate(calc(-50% + 112px), calc(-50% - 64px));
+  }
+
+  .clock-number-3 {
+    transform: translate(calc(-50% + 128px), -50%);
+  }
+
+  .clock-number-4 {
+    transform: translate(calc(-50% + 112px), calc(-50% + 64px));
+  }
+
+  .clock-number-5 {
+    transform: translate(calc(-50% + 64px), calc(-50% + 112px));
+  }
+
+  .clock-number-6 {
+    transform: translate(-50%, calc(-50% + 128px));
+  }
+
+  .clock-number-7 {
+    transform: translate(calc(-50% - 64px), calc(-50% + 112px));
+  }
+
+  .clock-number-8 {
+    transform: translate(calc(-50% - 112px), calc(-50% + 64px));
+  }
+
+  .clock-number-9 {
+    transform: translate(calc(-50% - 128px), -50%);
+  }
+
+  .clock-number-10 {
+    transform: translate(calc(-50% - 112px), calc(-50% - 64px));
+  }
+
+  .clock-number-11 {
+    transform: translate(calc(-50% - 64px), calc(-50% - 112px));
+  }
+
+  .clock-check-button {
+    padding: 12px 24px;
+    font-size: 14px;
+    min-width: 140px;
+    transform: translate(-50%, -50%) rotate(-45deg) translateY(-180px);
+  }
+
+  /* Premium hover effect maintained on tablet - chỉ khi hover vào clock-face */
+  .clock-face:hover .clock-check-button.checkin:not(:disabled),
+  .clock-check-button.checkin:focus-visible:not(:disabled),
+  .clock-face:hover .clock-check-button.checkout:not(:disabled),
+  .clock-check-button.checkout:focus-visible:not(:disabled) {
+    transform: translate(-50%, -50%) rotate(-45deg) translateY(-180px) scale(1.02);
+  }
+
+  .sidebar {
+    width: 320px;
   }
 }
 
 @media (max-width: 480px) {
-  .hero-card {
-    padding: var(--spacing-24);
+  .clock-face {
+    width: 280px;
+    height: 280px;
   }
 
-  .hero-actions {
-    flex-direction: column;
-    align-items: stretch;
+  .clock-hand-hour {
+    height: 70px;
   }
 
-  .filter-actions {
+  .clock-hand-minute {
+    height: 100px;
+  }
+
+  .clock-hand-second {
+    height: 115px;
+  }
+
+  .clock-number {
+    font-size: 14px;
+    width: 20px;
+    height: 20px;
+  }
+
+  .clock-number-12 {
+    transform: translate(-50%, calc(-50% - 112px));
+  }
+
+  .clock-number-1 {
+    transform: translate(calc(-50% + 56px), calc(-50% - 98px));
+  }
+
+  .clock-number-2 {
+    transform: translate(calc(-50% + 98px), calc(-50% - 56px));
+  }
+
+  .clock-number-3 {
+    transform: translate(calc(-50% + 112px), -50%);
+  }
+
+  .clock-number-4 {
+    transform: translate(calc(-50% + 98px), calc(-50% + 56px));
+  }
+
+  .clock-number-5 {
+    transform: translate(calc(-50% + 56px), calc(-50% + 98px));
+  }
+
+  .clock-number-6 {
+    transform: translate(-50%, calc(-50% + 112px));
+  }
+
+  .clock-number-7 {
+    transform: translate(calc(-50% - 56px), calc(-50% + 98px));
+  }
+
+  .clock-number-8 {
+    transform: translate(calc(-50% - 98px), calc(-50% + 56px));
+  }
+
+  .clock-number-9 {
+    transform: translate(calc(-50% - 112px), -50%);
+  }
+
+  .clock-number-10 {
+    transform: translate(calc(-50% - 98px), calc(-50% - 56px));
+  }
+
+  .clock-number-11 {
+    transform: translate(calc(-50% - 56px), calc(-50% - 98px));
+  }
+
+  .clock-check-button {
+    padding: 10px 20px;
+    font-size: 14px;
+    min-width: 120px;
+    transform: translate(-50%, -50%) rotate(-45deg) translateY(-150px);
+  }
+
+  /* Premium hover effect maintained on mobile - chỉ khi hover vào clock-face */
+  .clock-face:hover .clock-check-button.checkin:not(:disabled),
+  .clock-check-button.checkin:focus-visible:not(:disabled),
+  .clock-face:hover .clock-check-button.checkout:not(:disabled),
+  .clock-check-button.checkout:focus-visible:not(:disabled) {
+    transform: translate(-50%, -50%) rotate(-45deg) translateY(-150px) scale(1.02);
+  }
+
+  .sidebar {
     width: 100%;
-    justify-content: flex-start;
-    flex-wrap: wrap;
+  }
+
+  .filter-nudge {
+    right: 16px;
+    font-size: 12px;
+    padding: 6px 10px;
   }
 }

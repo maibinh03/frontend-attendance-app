@@ -247,8 +247,9 @@ const DatePicker = ({
             return { start: day, end: null }
         }
 
+        // Allow selecting backwards - extend the range backwards instead of resetting
         if (isBefore(day, selected.start)) {
-            return { start: day, end: null }
+            return { start: day, end: selected.start }
         }
 
         if (isSameDay(day, selected.start)) {

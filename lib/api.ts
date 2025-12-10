@@ -167,19 +167,26 @@ class ApiClient {
 
       return parsedData as T
     } catch (error) {
-      // Log network/other errors
-      console.error('❌ [API Error]', {
+      // Log network/other errors without breaking dev overlay
+      const normalizedMessage =
+        error instanceof Error
+          ? error.message
+          : error && typeof error === 'object' && 'message' in error
+            ? String((error as { message: unknown }).message)
+            : JSON.stringify(error ?? 'Unknown error')
+
+      console.warn('❌ [API Error]', {
         method: options.method || 'GET',
         url,
-        error: error instanceof Error ? error.message : String(error),
+        error: normalizedMessage,
         timestamp: new Date().toISOString()
       })
-      
+
       if (error && typeof error === 'object' && 'message' in error && 'status' in error) {
         throw error
       }
       throw {
-        message: error instanceof Error ? error.message : 'Network error occurred',
+        message: normalizedMessage || 'Network error occurred',
         status: undefined
       } as ApiError
     }

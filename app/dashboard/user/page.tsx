@@ -14,7 +14,7 @@ import { useRouter } from 'next/navigation'
 import DatePicker, { type DateRangeValue } from '@/components/date-picker'
 import { USER_ROLES, authUtils } from '@/lib/auth'
 import { apiClient } from '@/lib/api'
-import { formatDate, formatDateTime, formatTotalHours } from '@/lib/utils/format'
+import { formatDate, formatDateDetailed, formatDateTime, formatTimeOnly, formatTotalHours, formatTotalHoursAsDateTime } from '@/lib/utils/format'
 import { MESSAGE_TIMEOUT } from '@/lib/constants'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import '@/app/styles/user-dashboard.css'
@@ -82,18 +82,78 @@ const formatUserOptionLabel = (
   return user.isSelf ? `${baseName} - người dùng hiện tại` : baseName
 }
 
-const HistoryRow = memo<{ attendance: Attendance }>(({ attendance }) => (
-  <tr className="history-row">
-    <td suppressHydrationWarning>{formatDate(new Date(attendance.workDate))}</td>
-    <td suppressHydrationWarning>{attendance.checkInTime ? formatDateTime(attendance.checkInTime) : '--'}</td>
-    <td suppressHydrationWarning>{attendance.checkOutTime ? formatDateTime(attendance.checkOutTime) : '--'}</td>
-    <td>{formatTotalHours(attendance.totalHours ?? null)}</td>
-    <td>
-      <span className={`status-pill ${attendance.status}`}>{attendance.status}</span>
-    </td>
-  </tr>
-))
+const HistoryRow = memo<{ attendance: Attendance }>(({ attendance }) => {
+  // Tính tổng giờ từ checkInTime và checkOutTime nếu có
+  const calculatedHours = useMemo(() => {
+    if (!attendance.checkInTime || !attendance.checkOutTime) {
+      return attendance.totalHours ?? null
+    }
+    const start = new Date(attendance.checkInTime).getTime()
+    const end = new Date(attendance.checkOutTime).getTime()
+    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) {
+      return attendance.totalHours ?? null
+    }
+    const diffMs = end - start
+    // Tính chính xác bằng giây, không làm tròn quá sớm
+    const hours = diffMs / (1000 * 60 * 60)
+    // Giữ nhiều chữ số thập phân để không mất thông tin với thời gian ngắn
+    return hours
+  }, [attendance.checkInTime, attendance.checkOutTime, attendance.totalHours])
+
+  return (
+    <tr className="history-row">
+      <td suppressHydrationWarning>{formatDate(new Date(attendance.workDate))}</td>
+      <td suppressHydrationWarning>{attendance.checkInTime ? formatTimeOnly(attendance.checkInTime) : '--'}</td>
+      <td suppressHydrationWarning>{attendance.checkOutTime ? formatTimeOnly(attendance.checkOutTime) : '--'}</td>
+      <td>{formatTotalHoursAsDateTime(calculatedHours)}</td>
+      <td>
+        <span className={`status-pill ${attendance.status}`}>{attendance.status}</span>
+      </td>
+    </tr>
+  )
+})
 HistoryRow.displayName = 'HistoryRow'
+
+const ClockHands = memo<{ status: 'IN' | 'OUT'; elapsedSeconds: number }>(({ status, elapsedSeconds }) => {
+  const [currentTime, setCurrentTime] = useState<Date | null>(null)
+
+  useEffect(() => {
+    setCurrentTime(new Date())
+    const interval = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  if (!currentTime) {
+    return (
+      <>
+        <div className="clock-hand clock-hand-hour" style={{ transform: 'rotate(0deg)' }} suppressHydrationWarning />
+        <div className="clock-hand clock-hand-minute" style={{ transform: 'rotate(0deg)' }} suppressHydrationWarning />
+        <div className="clock-hand clock-hand-second" style={{ transform: 'rotate(0deg)' }} suppressHydrationWarning />
+        <div className="clock-center" />
+      </>
+    )
+  }
+
+  const hours = currentTime.getHours() % 12
+  const minutes = currentTime.getMinutes()
+  const seconds = currentTime.getSeconds()
+
+  const hourAngle = (hours * 30) + (minutes * 0.5)
+  const minuteAngle = minutes * 6
+  const secondAngle = seconds * 6
+
+  return (
+    <>
+      <div className="clock-hand clock-hand-hour" style={{ transform: `rotate(${hourAngle}deg)` }} suppressHydrationWarning />
+      <div className="clock-hand clock-hand-minute" style={{ transform: `rotate(${minuteAngle}deg)` }} suppressHydrationWarning />
+      <div className="clock-hand clock-hand-second" style={{ transform: `rotate(${secondAngle}deg)` }} suppressHydrationWarning />
+      <div className="clock-center" />
+    </>
+  )
+})
+ClockHands.displayName = 'ClockHands'
 
 const UserDashboardPage = (): ReactElement => {
   const router = useRouter()
@@ -114,6 +174,18 @@ const UserDashboardPage = (): ReactElement => {
   const [isChecking, setIsChecking] = useState(false)
   const [isLoadingPeers, setIsLoadingPeers] = useState(false)
   const [showUserPicker, setShowUserPicker] = useState(false)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSidebarHovered, setIsSidebarHovered] = useState(false)
+  const [showFilterNudge, setShowFilterNudge] = useState(false)
+  const [nudgeTop, setNudgeTop] = useState(0)
+  const [clockAnimation, setClockAnimation] = useState<'checkin' | 'checkout' | null>(null)
+  const sidebarCloseTimeoutRef = useRef<number | null>(null)
+  const [dateInfo, setDateInfo] = useState<{ weekday: string; day: string; month: string; year: string }>({
+    weekday: '',
+    day: '',
+    month: '',
+    year: ''
+  })
   const today = useMemo(() => getTodayString(), [])
   const filterRangeValue = useMemo<DateRangeValue>(
     () => ({
@@ -279,6 +351,10 @@ const UserDashboardPage = (): ReactElement => {
   }, [records])
 
   useEffect(() => {
+    setDateInfo(formatDateDetailed(new Date()))
+  }, [])
+
+  useEffect(() => {
     if (!showUserPicker) return
 
     const handleClickOutside = (event: MouseEvent) => {
@@ -354,8 +430,12 @@ const UserDashboardPage = (): ReactElement => {
         setStatus(res?.status === 'IN' ? 'IN' : 'OUT')
         setActiveRecord(res?.activeRecord ?? null)
       } catch (err) {
-        console.error('Error fetching attendance:', err)
-        pushMessage({ type: 'error', text: 'Không thể tải dữ liệu chấm công' })
+        const message =
+          err && typeof err === 'object' && 'message' in err
+            ? String((err as { message: unknown }).message)
+            : 'Không thể tải dữ liệu chấm công'
+        console.warn('Error fetching attendance:', message)
+        pushMessage({ type: 'error', text: message })
       } finally {
         setIsLoading(false)
       }
@@ -370,7 +450,12 @@ const UserDashboardPage = (): ReactElement => {
       const res = await apiClient.get<{ data?: PeerUser[] }>('/api/users/peers')
       setPeers(res?.data ?? [])
     } catch (err) {
-      console.error('Error loading peers:', err)
+      const message =
+        err && typeof err === 'object' && 'message' in err
+          ? String((err as { message: unknown }).message)
+          : 'Không thể tải danh sách đồng nghiệp'
+      console.warn('Error loading peers:', message)
+      pushMessage({ type: 'error', text: message })
     } finally {
       setIsLoadingPeers(false)
     }
@@ -408,9 +493,9 @@ const UserDashboardPage = (): ReactElement => {
     }
 
     setIsChecking(true)
+    setClockAnimation('checkin')
     try {
       await apiClient.post('/api/attendance/checkin', {})
-      pushMessage({ type: 'success', text: 'Check-in thành công!' })
       await fetchAttendance()
     } catch (err) {
       const errorMessage = err && typeof err === 'object' && 'message' in err
@@ -419,6 +504,7 @@ const UserDashboardPage = (): ReactElement => {
       pushMessage({ type: 'error', text: errorMessage })
     } finally {
       setIsChecking(false)
+      setTimeout(() => setClockAnimation(null), 1000)
     }
   }, [canCheckInOut, currentUser, status, fetchAttendance, pushMessage])
 
@@ -434,9 +520,9 @@ const UserDashboardPage = (): ReactElement => {
     }
 
     setIsChecking(true)
+    setClockAnimation('checkout')
     try {
       await apiClient.post('/api/attendance/checkout', {})
-      pushMessage({ type: 'success', text: 'Check-out thành công!' })
       await fetchAttendance()
     } catch (err) {
       const errorMessage = err && typeof err === 'object' && 'message' in err
@@ -445,6 +531,7 @@ const UserDashboardPage = (): ReactElement => {
       pushMessage({ type: 'error', text: errorMessage })
     } finally {
       setIsChecking(false)
+      setTimeout(() => setClockAnimation(null), 1000)
     }
   }, [canCheckInOut, currentUser, status, fetchAttendance, pushMessage])
 
@@ -460,6 +547,7 @@ const UserDashboardPage = (): ReactElement => {
       event.preventDefault()
       await fetchAttendance({ ...filters, userId: selectedUserId })
       scrollToHistory()
+      setIsSidebarOpen(false)
     },
     [fetchAttendance, filters, scrollToHistory, selectedUserId]
   )
@@ -503,11 +591,70 @@ const UserDashboardPage = (): ReactElement => {
     [totalPages]
   )
 
+  const handleHistoryMouseEnter = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    setShowFilterNudge(true)
+    setNudgeTop(event.clientY)
+  }, [])
+
+  const handleHistoryMouseMove = useCallback((event: React.MouseEvent<HTMLElement>) => {
+    if (showFilterNudge) {
+      setNudgeTop(event.clientY)
+    }
+  }, [showFilterNudge])
+
+  const handleHistoryMouseLeave = useCallback(() => {
+    setShowFilterNudge(false)
+  }, [])
+
+  const handleSidebarMouseEnter = useCallback(() => {
+    if (sidebarCloseTimeoutRef.current) {
+      window.clearTimeout(sidebarCloseTimeoutRef.current)
+      sidebarCloseTimeoutRef.current = null
+    }
+    setIsSidebarHovered(true)
+  }, [])
+
+  const handleSidebarMouseLeave = useCallback(() => {
+    setIsSidebarHovered(false)
+    // Delay đóng sidebar 0.5s để tránh đóng nhầm
+    sidebarCloseTimeoutRef.current = window.setTimeout(() => {
+      if (!isSidebarOpen) {
+        setIsSidebarHovered(false)
+      }
+      sidebarCloseTimeoutRef.current = null
+    }, 500)
+  }, [isSidebarOpen])
+
+  const handleTriggerMouseEnter = useCallback(() => {
+    if (sidebarCloseTimeoutRef.current) {
+      window.clearTimeout(sidebarCloseTimeoutRef.current)
+      sidebarCloseTimeoutRef.current = null
+    }
+    setIsSidebarHovered(true)
+  }, [])
+
+  const handleTriggerMouseLeave = useCallback(() => {
+    // Delay đóng sidebar 1s
+    sidebarCloseTimeoutRef.current = window.setTimeout(() => {
+      setIsSidebarHovered(false)
+      sidebarCloseTimeoutRef.current = null
+    }, 1000)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (sidebarCloseTimeoutRef.current) {
+        window.clearTimeout(sidebarCloseTimeoutRef.current)
+      }
+    }
+  }, [])
+
   return (
     <div className="apple-attendance">
       <header className="apple-topbar">
         <div className="topbar-blur" />
         <div className="topbar-content">
+          <div className="topbar-left" />
           <div className="topbar-center">
             <span className="topbar-title">Chấm công · {isViewingSelf ? 'Bạn' : selectedUserDisplay}</span>
             {isViewingSelf ? <span className="topbar-underline" /> : null}
@@ -526,161 +673,133 @@ const UserDashboardPage = (): ReactElement => {
         </div>
       ) : null}
 
-      <div className="apple-shell">
-        <main className="apple-main">
-          <section className="hero-grid">
-            <div className="hero-card">
-              <div className="hero-top">
-                <div className="status-row">
-                  <span className={`status-badge ${status === 'IN' ? 'active' : 'idle'}`}>
-                    {status === 'IN' ? 'Đang làm việc' : 'Đang rảnh'}
-                  </span>
-                  {!canCheckInOut ? <span className="pill subtle">Đang xem đồng nghiệp</span> : null}
-                </div>
-                <div className="hero-heading">
-                  <p className="eyebrow">Chấm công</p>
-                  <h1>{status === 'IN' ? 'Phiên đang chạy' : 'Sẵn sàng bắt đầu'}</h1>
-                  <p className="subhead">Theo dõi và chốt giờ làm tức thì.</p>
-                </div>
-                <div className="timer-block">
-                  <div className="timer-meta">
-                    <p className="eyebrow">Thời gian phiên</p>
-                    <div className="live-row">
-                      <span className={`live-dot ${status === 'IN' ? 'active' : 'idle'}`} />
-                      <span className="timer-value" suppressHydrationWarning>
-                        {sessionTimerText}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="session-meta">
-                  <div className="meta-col">
-                    <p className="label">Phiên hiện tại</p>
-                    <strong suppressHydrationWarning>
-                      {activeRecord ? formatDateTime(activeRecord.checkInTime) : 'Chưa bắt đầu'}
-                    </strong>
-                    <p className="note">{status === 'IN' ? 'Đang hoạt động' : 'Chưa check-in'}</p>
-                  </div>
-                  <div className="meta-col">
-                    <p className="label">Phiên gần nhất</p>
-                    <strong suppressHydrationWarning>
-                      {lastRecord ? formatDate(new Date(lastRecord.workDate)) : 'Chưa có dữ liệu'}
-                    </strong>
-                    <p className="note" suppressHydrationWarning>
-                      {lastRecord?.checkOutTime
-                        ? `Check-out: ${formatDateTime(lastRecord.checkOutTime)}`
-                        : lastRecord
-                          ? 'Chưa check-out'
-                          : 'Chưa ghi nhận ca làm việc'}
-                    </p>
-                  </div>
-                  <div className="meta-col">
-                    <p className="label">Trạng thái</p>
-                    <strong>{status === 'IN' ? 'Đang làm việc' : 'Ngoài ca'}</strong>
-                    <p className="note">{isViewingSelf ? 'Phiên của bạn' : 'Phiên của người đang xem'}</p>
-                  </div>
-                </div>
-              </div>
-              <div className="hero-actions">
-                {status === 'IN' ? (
-                  <button
-                    className="btn primary danger"
-                    onClick={canCheckInOut ? handleCheckOut : undefined}
-                    disabled={isChecking || !canCheckInOut}
-                  >
-                    {!canCheckInOut ? 'Chỉ xem' : isChecking ? 'Đang xử lý...' : 'Check-out'}
-                  </button>
-                ) : (
-                  <button
-                    className="btn primary"
-                    onClick={canCheckInOut ? handleCheckIn : undefined}
-                    disabled={isChecking || !canCheckInOut}
-                  >
-                    {!canCheckInOut ? 'Chỉ xem' : isChecking ? 'Đang xử lý...' : 'Check-in'}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={() => fetchAttendance()}
-                  disabled={isLoading || isChecking}
-                >
-                  {isLoading ? 'Đang tải...' : 'Làm mới'}
-                </button>
+      {/* Sidebar trigger */}
+      <div
+        className="sidebar-trigger"
+        onMouseEnter={handleTriggerMouseEnter}
+        onMouseLeave={handleTriggerMouseLeave}
+      />
+
+      {/* Sidebar */}
+      <div className={`sidebar-overlay ${isSidebarOpen ? 'open' : ''}`} onClick={() => setIsSidebarOpen(false)} />
+      <aside
+        className={`sidebar ${isSidebarOpen || isSidebarHovered ? 'open' : ''}`}
+        onMouseEnter={handleSidebarMouseEnter}
+        onMouseLeave={handleSidebarMouseLeave}
+      >
+        <div className="sidebar-content">
+          <div className="user-card" ref={userPickerRef}>
+            <div className="user-card-head">
+              <div>
+                <p className="eyebrow">Bộ lọc</p>
+                <p className="subtle-text">{isViewingSelf ? 'Bạn' : selectedUserDisplay}</p>
               </div>
             </div>
-
-            <div className="user-card" ref={userPickerRef}>
-              <div className="user-card-head">
-                <div>
-                  <p className="eyebrow">Người dùng & Bộ lọc</p>
-                  <p className="subtle-text">{isViewingSelf ? 'Bạn' : selectedUserDisplay}</p>
+            <div className="user-selector-block">
+              <button
+                type="button"
+                className="user-selector"
+                onClick={() => setShowUserPicker((prev) => !prev)}
+                disabled={isLoadingPeers}
+                aria-expanded={showUserPicker}
+              >
+                <div className="user-selector-main">
+                  <span className="user-avatar">{(selectedUserDisplay || 'B').slice(0, 1).toUpperCase()}</span>
+                  <div className="user-selector-text">
+                    <p className="label">Người dùng</p>
+                    <strong>{isViewingSelf ? 'Bạn' : selectedUserDisplay}</strong>
+                  </div>
                 </div>
-              </div>
-              <div className="user-selector-block">
-                <button
-                  type="button"
-                  className="user-selector"
-                  onClick={() => setShowUserPicker((prev) => !prev)}
-                  disabled={isLoadingPeers}
-                  aria-expanded={showUserPicker}
-                >
-                  <div className="user-selector-main">
-                    <span className="user-avatar">{(selectedUserDisplay || 'B').slice(0, 1).toUpperCase()}</span>
-                    <div className="user-selector-text">
-                      <p className="label">Người dùng</p>
-                      <strong>{isViewingSelf ? 'Bạn' : selectedUserDisplay}</strong>
-                    </div>
-                  </div>
+                <span className="chevron">▾</span>
+              </button>
+              {showUserPicker ? (
+                <div className="user-menu">
+                  {userChoices.map((choice) => (
+                    <button
+                      key={choice.id === 'me' ? 'me' : String(choice.id)}
+                      type="button"
+                      className={`user-menu-item${selectedUserId === choice.id ? ' active' : ''}`}
+                      onClick={() => handleUserSelect(choice.id)}
+                    >
+                      {choice.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="calendar-tile">
+              <form className="filter-compact" onSubmit={handleFilterSubmit}>
+                <div className="calendar-header">
+                  <span className="calendar-title">Chọn khoảng ngày</span>
                   <span className="chevron">▾</span>
+                </div>
+                <DatePicker
+                  mode="range"
+                  value={filterRangeValue}
+                  onChange={handleDatePickerChange}
+                  showQuickFilters
+                  ariaLabel="Chọn khoảng ngày"
+                />
+                <div className="filter-compact-buttons">
+                  <button type="submit" className="btn primary" disabled={isLoading}>
+                    {isLoading ? 'Đang lọc...' : 'Áp dụng'}
+                  </button>
+                  <button type="button" className="btn ghost" onClick={handleResetFilters} disabled={isLoading}>
+                    Xóa
+                  </button>
+                  {canViewUsers ? (
+                    <button type="button" className="btn ghost" onClick={() => router.push('/users')}>
+                      Người dùng
+                    </button>
+                  ) : null}
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div className="apple-shell">
+        <main className="apple-main">
+          <section className="hero-section">
+            <div className="clock-container">
+              <div className={`clock-face ${clockAnimation ? `clock-animate-${clockAnimation}` : ''}`}>
+                {/* Clock numbers */}
+                {[12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((num) => (
+                  <div key={num} className={`clock-number clock-number-${num}`}>
+                    {num}
+                  </div>
+                ))}
+
+                {/* Clock hands */}
+                <ClockHands status={status} elapsedSeconds={elapsedSeconds} />
+
+                {/* Check-in/Checkout button positioned like stopwatch button */}
+                <button
+                  className={`clock-check-button ${status === 'IN' ? 'checkout' : 'checkin'}`}
+                  onClick={status === 'IN' ? (canCheckInOut ? handleCheckOut : undefined) : (canCheckInOut ? handleCheckIn : undefined)}
+                  disabled={isChecking || !canCheckInOut}
+                  aria-label={status === 'IN' ? 'Check-out' : 'Check-in'}
+                >
+                  {!canCheckInOut ? 'Chỉ xem' : isChecking ? 'Đang xử lý...' : status === 'IN' ? 'Check-out' : 'Check-in'}
                 </button>
-                {showUserPicker ? (
-                  <div className="user-menu">
-                    {userChoices.map((choice) => (
-                      <button
-                        key={choice.id === 'me' ? 'me' : String(choice.id)}
-                        type="button"
-                        className={`user-menu-item${selectedUserId === choice.id ? ' active' : ''}`}
-                        onClick={() => handleUserSelect(choice.id)}
-                      >
-                        {choice.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
               </div>
-              <div className="calendar-tile">
-                <form className="filter-compact" onSubmit={handleFilterSubmit}>
-                  <div className="calendar-header">
-                    <span className="calendar-title">Chọn khoảng ngày</span>
-                    <span className="chevron">▾</span>
-                  </div>
-                  <DatePicker
-                    mode="range"
-                    value={filterRangeValue}
-                    onChange={handleDatePickerChange}
-                    showQuickFilters
-                    ariaLabel="Chọn khoảng ngày"
-                  />
-                  <div className="filter-compact-buttons">
-                    <button type="submit" className="btn primary" disabled={isLoading}>
-                      {isLoading ? 'Đang lọc...' : 'Áp dụng'}
-                    </button>
-                    <button type="button" className="btn ghost" onClick={handleResetFilters} disabled={isLoading}>
-                      Xóa
-                    </button>
-                    {canViewUsers ? (
-                      <button type="button" className="btn ghost" onClick={() => router.push('/users')}>
-                        Người dùng
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
+
+              {/* Date display below clock */}
+              <div className="clock-date-box" suppressHydrationWarning>
+                <div className="date-weekday">{dateInfo.weekday}</div>
+                <div className="date-details">
+                  <span className="date-day">{dateInfo.day}</span>
+                  <span className="date-separator">/</span>
+                  <span className="date-month">{dateInfo.month}</span>
+                  <span className="date-separator">/</span>
+                  <span className="date-year">{dateInfo.year}</span>
+                </div>
               </div>
             </div>
           </section>
 
-          <section className="history-block" ref={historyRef}>
+          <section className="history-block" ref={historyRef} onMouseEnter={handleHistoryMouseEnter} onMouseMove={handleHistoryMouseMove} onMouseLeave={handleHistoryMouseLeave}>
             <div className="history-head">
               <div>
                 <p className="eyebrow">Lịch sử chấm công</p>
@@ -740,25 +859,36 @@ const UserDashboardPage = (): ReactElement => {
                 </button>
               </div>
             ) : null}
+
+            <div className="summary-grid">
+              <div className="summary-card">
+                <p className="eyebrow">Tổng thời gian làm việc</p>
+                <strong className="summary-value">{formatTotalHoursAsDateTime(totalHours)}</strong>
+                <p className="note">Tính theo khoảng thời gian bạn đang lọc.</p>
+              </div>
+              <div className="summary-card">
+                <p className="eyebrow">Số phiên</p>
+                <strong className="summary-value">{records.length}</strong>
+                <p className="note">Tổng số phiên trong bộ lọc.</p>
+              </div>
+              <div className="summary-card">
+                <p className="eyebrow">Thời lượng trung bình</p>
+                <strong className="summary-value">{formatTotalHoursAsDateTime(averageHours)}</strong>
+                <p className="note">Thời lượng trung bình mỗi phiên.</p>
+              </div>
+            </div>
           </section>
 
-          <section className="summary-grid">
-            <div className="summary-card">
-              <p className="eyebrow">Tổng giờ</p>
-              <strong className="summary-value">{formatTotalHours(totalHours)}</strong>
-              <p className="note">Tính theo khoảng thời gian bạn đang lọc.</p>
+          {showFilterNudge ? (
+            <div className="filter-nudge" style={{ top: `${nudgeTop}px` }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <circle cx="18" cy="6" r="2" fill="currentColor" />
+                <circle cx="12" cy="12" r="2" fill="currentColor" />
+                <circle cx="6" cy="18" r="2" fill="currentColor" />
+              </svg>
             </div>
-            <div className="summary-card">
-              <p className="eyebrow">Số phiên</p>
-              <strong className="summary-value">{records.length}</strong>
-              <p className="note">Tổng số phiên trong bộ lọc.</p>
-            </div>
-            <div className="summary-card">
-              <p className="eyebrow">Thời lượng TB</p>
-              <strong className="summary-value">{formatTotalHours(averageHours)}</strong>
-              <p className="note">Thời lượng trung bình mỗi phiên.</p>
-            </div>
-          </section>
+          ) : null}
         </main>
       </div>
     </div>

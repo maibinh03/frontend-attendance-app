@@ -38,19 +38,18 @@ const LoginPage = (): ReactElement => {
 
             setErrorMessage(data.message ?? 'Đăng nhập thất bại. Vui lòng thử lại.')
         } catch (error) {
-            console.error('Login error:', error)
-            // Extract error message from API error
-            let errorMessage = 'Đã xảy ra lỗi khi kết nối đến server. Vui lòng thử lại.'
-            
+            let normalizedMessage = 'Đã xảy ra lỗi khi kết nối đến server. Vui lòng thử lại.'
+
             if (error && typeof error === 'object') {
                 if ('message' in error && error.message) {
-                    errorMessage = String(error.message)
+                    normalizedMessage = String(error.message)
                 } else if ('status' in error && error.status === 401) {
-                    errorMessage = 'Tên đăng nhập hoặc mật khẩu không đúng'
+                    normalizedMessage = 'Tên đăng nhập hoặc mật khẩu không đúng'
                 }
             }
-            
-            setErrorMessage(errorMessage)
+
+            console.warn('Login error:', normalizedMessage)
+            setErrorMessage(normalizedMessage)
         } finally {
             setIsLoading(false)
         }
