@@ -8,7 +8,8 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type ReactElement
+  type ReactElement,
+  type ReactNode
 } from 'react'
 import { useRouter } from 'next/navigation'
 import DatePicker, { type DateRangeValue } from '@/components/date-picker'
@@ -19,6 +20,7 @@ import { MESSAGE_TIMEOUT } from '@/lib/constants'
 import { useRequireAuth } from '@/hooks/useRequireAuth'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import '@/app/styles/user-dashboard.css'
+import { calculateAttendanceStats } from '@/utils/attendanceStats'
 
 export const dynamic = 'force-dynamic'
 
@@ -156,6 +158,26 @@ const ClockHands = memo<{ status: 'IN' | 'OUT'; elapsedSeconds: number }>(({ sta
 })
 ClockHands.displayName = 'ClockHands'
 
+const BadgePill = ({ className = '', children }: { className?: string; children: ReactNode }) => (
+  <span className={`history-badge ${className}`.trim()}>{children}</span>
+)
+
+const BadgeStreak = ({ streakDays }: { streakDays: number }) => {
+  if (streakDays < 3) return null
+  return (
+    <BadgePill className="history-badge-streak">
+      <span aria-hidden>🔥</span>
+      <span>Streak 3+ days</span>
+    </BadgePill>
+  )
+}
+
+const BadgeLevel = ({ level }: { level: number }) => (
+  <BadgePill className="history-badge-level">
+    <span>{`Lv.${level}`}</span>
+  </BadgePill>
+)
+
 const UserDashboardPage = (): ReactElement => {
   const router = useRouter()
   const currentUser = useRequireAuth()
@@ -286,17 +308,11 @@ const UserDashboardPage = (): ReactElement => {
   const [message, setMessage] = useState<MessageState>(null)
   const messageTimeoutRef = useRef<number | null>(null)
   const userPickerRef = useRef<HTMLDivElement | null>(null)
+  const topbarMenuRef = useRef<HTMLDivElement | null>(null)
+  const topbarMenuTimeoutRef = useRef<number | null>(null)
+  const [isTopbarMenuOpen, setIsTopbarMenuOpen] = useState(false)
 
-  const totalHours = useMemo(() => {
-    const hours = records.reduce((sum, record) => {
-      if (!record.checkInTime || !record.checkOutTime) return sum
-      const start = new Date(record.checkInTime).getTime()
-      const end = new Date(record.checkOutTime).getTime()
-      if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return sum
-      return sum + (end - start) / (1000 * 60 * 60)
-    }, 0)
-    return Math.round(hours * 100) / 100
-  }, [records])
+  const { totalHours, streakDays, level } = useMemo(() => calculateAttendanceStats(records), [records])
 
   const averageHours = useMemo(() => {
     if (!records.length) return 0
@@ -486,6 +502,7 @@ const UserDashboardPage = (): ReactElement => {
   const handleUserSelect = useCallback((userId: 'me' | number) => {
     setSelectedUserId(userId)
     setShowUserPicker(false)
+    setIsTopbarMenuOpen(false)
   }, [])
 
   const handleLogout = useCallback(() => {
@@ -618,6 +635,21 @@ const UserDashboardPage = (): ReactElement => {
     setShowFilterNudge(false)
   }, [])
 
+  const handleTopbarMouseEnter = useCallback(() => {
+    if (topbarMenuTimeoutRef.current) {
+      window.clearTimeout(topbarMenuTimeoutRef.current)
+      topbarMenuTimeoutRef.current = null
+    }
+    setIsTopbarMenuOpen(true)
+  }, [])
+
+  const handleTopbarMouseLeave = useCallback(() => {
+    topbarMenuTimeoutRef.current = window.setTimeout(() => {
+      setIsTopbarMenuOpen(false)
+      topbarMenuTimeoutRef.current = null
+    }, 160)
+  }, [])
+
   const handleSidebarMouseEnter = useCallback(() => {
     if (sidebarCloseTimeoutRef.current) {
       window.clearTimeout(sidebarCloseTimeoutRef.current)
@@ -658,6 +690,9 @@ const UserDashboardPage = (): ReactElement => {
       if (sidebarCloseTimeoutRef.current) {
         window.clearTimeout(sidebarCloseTimeoutRef.current)
       }
+      if (topbarMenuTimeoutRef.current) {
+        window.clearTimeout(topbarMenuTimeoutRef.current)
+      }
     }
   }, [])
 
@@ -669,9 +704,31 @@ const UserDashboardPage = (): ReactElement => {
           <div className="topbar-left">
             <ThemeToggle />
           </div>
-          <div className="topbar-center">
-            <span className="topbar-title">Chấm công · {isViewingSelf ? 'Bạn' : selectedUserDisplay}</span>
+          <div
+            className={`topbar-center ${isTopbarMenuOpen ? 'menu-open' : ''}`}
+            onMouseEnter={handleTopbarMouseEnter}
+            onMouseLeave={handleTopbarMouseLeave}
+            ref={topbarMenuRef}
+          >
+            <div className="topbar-title-trigger" aria-haspopup="menu" aria-expanded={isTopbarMenuOpen}>
+              <span className="topbar-title">Chấm công · {isViewingSelf ? 'Bạn' : selectedUserDisplay}</span>
+              <span className="chevron">▾</span>
+            </div>
             {isViewingSelf ? <span className="topbar-underline" /> : null}
+            {isTopbarMenuOpen ? (
+              <div className="user-menu topbar-user-menu" role="menu">
+                {userChoices.map((choice) => (
+                  <button
+                    key={choice.id === 'me' ? 'me' : String(choice.id)}
+                    type="button"
+                    className={`user-menu-item${selectedUserId === choice.id ? ' active' : ''}`}
+                    onClick={() => handleUserSelect(choice.id)}
+                  >
+                    {choice.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
           <div className="topbar-right">
             <button type="button" className="topbar-button danger" onClick={handleLogout}>
@@ -821,6 +878,10 @@ const UserDashboardPage = (): ReactElement => {
                 <p className="eyebrow">Lịch sử chấm công</p>
                 <h2>{historyTitle}</h2>
                 <p className="subhead">Xem lại chấm công theo ngày và người dùng.</p>
+              </div>
+              <div className="history-badge-group">
+                <BadgeLevel level={level} />
+                <BadgeStreak streakDays={streakDays} />
               </div>
             </div>
 

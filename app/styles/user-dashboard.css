@@ -130,8 +130,13 @@ body {
 .topbar-center {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 4px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 2;
 }
 
 .topbar-title {
@@ -139,6 +144,52 @@ body {
   font-weight: 600;
   color: var(--apple-text);
   transition: color var(--theme-transition);
+}
+
+.topbar-title-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid transparent;
+  cursor: default;
+  transition: background var(--theme-transition), border-color var(--theme-transition), box-shadow var(--transition);
+}
+
+:root.dark .topbar-title-trigger {
+  background: rgba(26, 26, 31, 0.8);
+}
+
+.topbar-center.menu-open .topbar-title-trigger,
+.topbar-title-trigger:hover {
+  border-color: var(--apple-border);
+  box-shadow: var(--shadow-soft);
+}
+
+.topbar-user-menu {
+  width: 240px;
+  min-width: 220px;
+  max-width: 320px;
+  right: 0;
+  left: auto;
+}
+
+.topbar-center .user-menu-item {
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .topbar-title {
+    font-size: 15px;
+  }
+
+  .topbar-center {
+    position: static;
+    transform: none;
+    margin: 0 auto;
+  }
 }
 
 .topbar-underline {
@@ -878,6 +929,41 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-16);
+}
+
+.history-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.history-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  border: 1px solid transparent;
+  background: var(--apple-muted);
+  color: var(--apple-text);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
+}
+
+.history-badge-streak {
+  background: #fff3cd;
+  border-color: #f2c94c;
+  color: #b88600;
+}
+
+.history-badge-level {
+  background: #e3f2fd;
+  border-color: #64b5f6;
+  color: #0d47a1;
 }
 
 .history-head h2 {
